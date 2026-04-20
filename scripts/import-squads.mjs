@@ -8,9 +8,10 @@
 // werden übersprungen, bei Re-Run zählen nur neue API-Calls.
 //
 // Usage:
-//   node scripts/import-squads.mjs                 # alle Teams aller Turniere
-//   node scripts/import-squads.mjs WM2022          # nur Teams dieses Turniers
-//   node scripts/import-squads.mjs WM2022 --force  # auch bereits importierte
+//   node scripts/import-squads.mjs                                 # alle Teams
+//   node scripts/import-squads.mjs WM2022                          # nur Teams dieses Turniers
+//   node scripts/import-squads.mjs WM2022 --only Qatar,Ecuador     # nur genannte Teams (Substring, case-insensitive)
+//   node scripts/import-squads.mjs WM2022 --force                  # auch bereits importierte refreshen
 //
 // Hinweise:
 // - /players/squads liefert den AKTUELLEN Kader, nicht historisch. Für Dev
@@ -46,7 +47,11 @@ if (!SUPABASE_SERVICE_ROLE) throw new Error('SUPABASE_SERVICE_ROLE_KEY fehlt in 
 
 const args = process.argv.slice(2);
 const FORCE = args.includes('--force');
-const TOURNAMENT_FILTER = args.find((a) => !a.startsWith('--')) ?? null;
+const onlyIdx = args.indexOf('--only');
+const ONLY = onlyIdx >= 0 && args[onlyIdx + 1]
+  ? args[onlyIdx + 1].split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+  : null;
+const TOURNAMENT_FILTER = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--only') ?? null;
 
 // Puffer, um unter 10 req/min zu bleiben (10 req/min = 1 alle 6s).
 const CALL_GAP_MS = 6500;
@@ -63,16 +68,26 @@ if (!allTeams || allTeams.length === 0) {
   process.exit(0);
 }
 
-// Idempotenz: Teams mit bereits importierten Spielern überspringen (außer --force).
+// --only "Name1,Name2": Whitelist per Team-Name (case-insensitive Substring).
 let teams = allTeams;
+if (ONLY) {
+  teams = teams.filter((t) => ONLY.some((n) => t.name.toLowerCase().includes(n)));
+  if (teams.length === 0) {
+    console.warn(`⚠ Kein Team passt zu --only ${ONLY.join(',')}. Verfügbar: ${allTeams.map((t) => t.name).join(', ')}`);
+    process.exit(0);
+  }
+  console.log(`↳ --only: ${teams.map((t) => t.name).join(', ')}`);
+}
+
+// Idempotenz: Teams mit bereits importierten Spielern überspringen (außer --force).
 if (!FORCE) {
   const { data: existing } = await supabase
     .from('players')
     .select('team_id')
-    .in('team_id', allTeams.map((t) => t.id));
+    .in('team_id', teams.map((t) => t.id));
   const haveSquad = new Set((existing ?? []).map((r) => r.team_id));
-  const skipped = allTeams.filter((t) => haveSquad.has(t.id));
-  teams = allTeams.filter((t) => !haveSquad.has(t.id));
+  const skipped = teams.filter((t) => haveSquad.has(t.id));
+  teams = teams.filter((t) => !haveSquad.has(t.id));
   if (skipped.length > 0) {
     console.log(`↷ Überspringe ${skipped.length} bereits importierte Teams: ${skipped.map((t) => t.name).join(', ')}`);
     console.log(`  (--force, um sie trotzdem zu refreshen)`);

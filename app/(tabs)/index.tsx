@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
 type DbStatus =
@@ -12,6 +13,7 @@ type DbStatus =
   | { state: 'error'; message: string };
 
 export default function HomeScreen() {
+  const { user, profile, signOut } = useAuth();
   const [db, setDb] = useState<DbStatus>({ state: 'loading' });
 
   useEffect(() => {
@@ -36,7 +38,13 @@ export default function HomeScreen() {
         <ThemedText type="title">Bolzify</ThemedText>
       </ThemedView>
 
-      <ThemedView style={styles.stepContainer}>
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle">Eingeloggt als</ThemedText>
+        <ThemedText>{profile?.username ?? '—'}</ThemedText>
+        <ThemedText style={styles.muted}>{user?.email ?? ''}</ThemedText>
+      </ThemedView>
+
+      <ThemedView style={styles.section}>
         <ThemedText type="subtitle">DB-Status</ThemedText>
         {db.state === 'loading' && <ThemedText>Prüfe Verbindung…</ThemedText>}
         {db.state === 'ok' && (
@@ -46,6 +54,10 @@ export default function HomeScreen() {
           <ThemedText>✗ Fehler: {db.message}</ThemedText>
         )}
       </ThemedView>
+
+      <Pressable style={styles.signOutBtn} onPress={signOut}>
+        <ThemedText style={styles.signOutText}>Abmelden</ThemedText>
+      </Pressable>
     </ParallaxScrollView>
   );
 }
@@ -56,8 +68,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  section: {
+    gap: 4,
+    marginBottom: 12,
   },
+  muted: { opacity: 0.6, fontSize: 12 },
+  signOutBtn: {
+    marginTop: 24,
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#888',
+  },
+  signOutText: { fontWeight: '600' },
 });

@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 
 type Match = {
   id: number;
+  tournament: string;
   kickoff_at: string;
   home_team: string;
   away_team: string;
@@ -29,6 +30,10 @@ type Match = {
   home_goals: number | null;
   away_goals: number | null;
 };
+
+// Zeitsperre gilt nur für das produktive Turnier WM2026.
+// WM2022 & andere Dev-Turniere sind jederzeit tippbar.
+const LIVE_TOURNAMENT = 'WM2026';
 
 const MAX_GOALS = 9;
 
@@ -55,7 +60,7 @@ export default function TipScreen() {
 
       const { data: m } = await supabase
         .from('matches')
-        .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+        .select('id, tournament, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
         .eq('id', numericId)
         .maybeSingle();
       setMatch(m);
@@ -76,7 +81,9 @@ export default function TipScreen() {
     })();
   }, [matchId, user]);
 
-  const tippable = match ? isBeforeKickoff(match.kickoff_at) : false;
+  const tippable = match
+    ? match.tournament !== LIVE_TOURNAMENT || isBeforeKickoff(match.kickoff_at)
+    : false;
 
   const submit = async () => {
     if (!user || !match) return;
@@ -295,7 +302,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginVertical: Spacing.lg,
   },
-  colon: { fontSize: FontSize.display, fontWeight: FontWeight.bold },
+  colon: { fontSize: FontSize.display, lineHeight: FontSize.display + 8, fontWeight: FontWeight.bold },
   stepper: {
     flex: 1,
     alignItems: 'center',
@@ -322,9 +329,11 @@ const styles = StyleSheet.create({
   },
   stepValue: {
     fontSize: FontSize.display,
+    lineHeight: FontSize.display + 8,
     fontWeight: FontWeight.bold,
     minWidth: 36,
     textAlign: 'center',
+    includeFontPadding: false,
   },
   label: {
     fontSize: FontSize.xs,

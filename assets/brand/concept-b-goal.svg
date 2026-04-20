@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Concept B — "Bolzplatz-Tor"
+  Minimal: ein Street-Pitch-Tor aus reduzierten Linien,
+  Ball als kräftiger Punkt im Netz. Grass-green Rahmen,
+  fast wie ein Piktogramm. Lesbar bei 48x48.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <pattern id="net" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse" patternTransform="rotate(0)">
+      <path d="M 0 0 L 48 48 M 48 0 L 0 48" stroke="#2E7D32" stroke-width="2.5" opacity="0.45"/>
+    </pattern>
+  </defs>
+
+  <!-- background: rounded square, rich dark with a hint of pitch -->
+  <rect width="1024" height="1024" rx="220" fill="#0F1510"/>
+
+  <!-- ground line -->
+  <rect x="120" y="820" width="784" height="10" rx="5" fill="#2E7D32" opacity="0.7"/>
+
+  <!-- goal frame -->
+  <g>
+    <!-- crossbar -->
+    <rect x="210" y="280" width="604" height="40" rx="20" fill="#E8F5E9"/>
+    <!-- left post -->
+    <rect x="210" y="280" width="40" height="545" rx="20" fill="#E8F5E9"/>
+    <!-- right post -->
+    <rect x="774" y="280" width="40" height="545" rx="20" fill="#E8F5E9"/>
+  </g>
+
+  <!-- net pattern inside the goal -->
+  <rect x="250" y="320" width="524" height="500" fill="url(#net)"/>
+
+  <!-- the ball, sitting just inside the right post -->
+  <g>
+    <circle cx="680" cy="690" r="78" fill="#FFFFFF"/>
+    <!-- classic football pentagon hint, very abstract -->
+    <path d="M 680 630 L 714 658 L 702 700 L 658 700 L 646 658 Z"
+          fill="#0F1510"/>
+  </g>
+
+  <!-- small wordmark-ready space (bottom) kept clean -->
+</svg>

@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 
 type Match = {
   id: number;
+  tournament: string;
   kickoff_at: string;
   home_team: string;
   away_team: string;
@@ -27,6 +28,8 @@ type Match = {
   home_goals: number | null;
   away_goals: number | null;
 };
+
+const LIVE_TOURNAMENT = 'WM2026';
 
 type Tip = {
   match_id: number;
@@ -66,7 +69,7 @@ export default function MatchesScreen() {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('matches')
-      .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+      .select('id, tournament, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
       .order('kickoff_at', { ascending: true });
     setMatches(data ?? []);
 
@@ -133,7 +136,8 @@ export default function MatchesScreen() {
         )}
         renderItem={({ item }) => {
           const tip = tips.get(item.id);
-          const tippable = isBeforeKickoff(item.kickoff_at);
+          const tippable =
+            item.tournament !== LIVE_TOURNAMENT || isBeforeKickoff(item.kickoff_at);
           return (
             <Pressable
               onPress={() => router.push({ pathname: '/tip/[matchId]', params: { matchId: String(item.id) } })}

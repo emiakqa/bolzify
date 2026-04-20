@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Concept A — "Chalk-B"
+  Nostalgie/Street: das "B" wirkt wie mit Kreide auf Asphalt gemalt,
+  mit leichten Unregelmäßigkeiten (minimale Rotation, rauhe Kante).
+  Hintergrund: dunkles Asphaltgrau. Akzent: Bolzplatz-grün.
+  Der zweite Bauch des B deutet einen Ball-Bounce an.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <filter id="rough" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="3"/>
+      <feDisplacementMap in="SourceGraphic" scale="4"/>
+    </filter>
+    <linearGradient id="asphalt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#161616"/>
+      <stop offset="1" stop-color="#0a0a0a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- asphalt background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#asphalt)"/>
+
+  <!-- leicht diagonale "pitch lines" als sehr dezente Andeutung -->
+  <g opacity="0.06" stroke="#ffffff" stroke-width="2">
+    <line x1="80"  y1="880" x2="944" y2="880"/>
+    <line x1="80"  y1="140" x2="944" y2="140"/>
+  </g>
+
+  <!-- The chalk B -->
+  <g transform="translate(300 210) rotate(-2 212 302)" filter="url(#rough)">
+    <!-- B-stroke: vertical bar + two arcs -->
+    <path d="
+      M 0 0
+      L 0 604
+      M 0 0
+      L 220 0
+      C 380 0 380 280 220 302
+      L 0 302
+      M 0 302
+      L 240 302
+      C 420 302 420 604 240 604
+      L 0 604
+      "
+      fill="none"
+      stroke="#66BB6A"
+      stroke-width="72"
+      stroke-linecap="round"
+      stroke-linejoin="round"/>
+  </g>
+
+  <!-- tiny "ball" dot in the lower bowl, as if resting in the B -->
+  <circle cx="640" cy="760" r="36" fill="#FFFFFF" opacity="0.95"/>
+  <circle cx="640" cy="760" r="36" fill="none" stroke="#0a0a0a" stroke-width="6"/>
+
+  <!-- subtle wordmark (only in wordmark lockup version) -->
+</svg>

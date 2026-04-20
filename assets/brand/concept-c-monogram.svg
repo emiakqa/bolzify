@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Concept C — "Modern Monogram"
+  Ein geometrisches "B", dessen zwei Bäuche als Flugkurven eines
+  Balles lesbar sind. Split-Color: Grass oben, Leather unten —
+  zwei Halbzeiten, zwei Bounces. Radikal minimal.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- background -->
+  <rect width="1024" height="1024" rx="220" fill="#FAFAFA"/>
+
+  <!-- subtle chalk horizon line as nostalgie hint -->
+  <line x1="0" y1="720" x2="1024" y2="720" stroke="#2E7D32" stroke-width="2" opacity="0.15"/>
+
+  <!-- vertical spine of the B -->
+  <rect x="280" y="230" width="80" height="564" rx="20" fill="#1B5E20"/>
+
+  <!-- upper bowl (grass-green) -->
+  <path d="
+    M 360 230
+    L 560 230
+    C 760 230 760 500 560 500
+    L 360 500
+    Z"
+    fill="#2E7D32"/>
+
+  <!-- lower bowl (leather) -->
+  <path d="
+    M 360 500
+    L 580 500
+    C 800 500 800 794 580 794
+    L 360 794
+    Z"
+    fill="#5D4037"/>
+
+  <!-- negative-space ball "trajectory" — a small white dot rising from lower bowl -->
+  <circle cx="640" cy="360" r="32" fill="#FAFAFA"/>
+  <circle cx="640" cy="360" r="32" fill="none" stroke="#1B5E20" stroke-width="4"/>
+
+  <!-- baseline tick as retro scoreboard vibe -->
+  <rect x="280" y="810" width="520" height="8" rx="4" fill="#5D4037" opacity="0.4"/>
+</svg>

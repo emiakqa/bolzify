@@ -55,6 +55,8 @@ type MatchRow = {
   kickoff_at: string;
   home_team: string;
   away_team: string;
+  home_team_id: number | null;
+  away_team_id: number | null;
   home_team_code: string | null;
   away_team_code: string | null;
   stage: string | null;
@@ -62,6 +64,7 @@ type MatchRow = {
   home_goals: number | null;
   away_goals: number | null;
   first_scorer: string | null;
+  first_scorer_id: number | null;
   updated_at: string;
 };
 type MatchInsert = {
@@ -70,6 +73,8 @@ type MatchInsert = {
   kickoff_at: string;
   home_team: string;
   away_team: string;
+  home_team_id?: number | null;
+  away_team_id?: number | null;
   home_team_code?: string | null;
   away_team_code?: string | null;
   stage?: string | null;
@@ -77,7 +82,42 @@ type MatchInsert = {
   home_goals?: number | null;
   away_goals?: number | null;
   first_scorer?: string | null;
+  first_scorer_id?: number | null;
   updated_at?: string;
+};
+
+type TeamRow = {
+  id: number;
+  name: string;
+  code: string | null;
+  logo_url: string | null;
+  tournament: string;
+};
+type TeamInsert = {
+  id: number;
+  name: string;
+  code?: string | null;
+  logo_url?: string | null;
+  tournament?: string;
+};
+
+type PlayerRow = {
+  id: number;
+  team_id: number;
+  name: string;
+  number: number | null;
+  position: string | null;
+  photo_url: string | null;
+  created_at: string;
+};
+type PlayerInsert = {
+  id: number;
+  team_id: number;
+  name: string;
+  number?: number | null;
+  position?: string | null;
+  photo_url?: string | null;
+  created_at?: string;
 };
 
 type TipRow = {
@@ -87,6 +127,7 @@ type TipRow = {
   home_goals: number;
   away_goals: number;
   first_scorer: string | null;
+  first_scorer_id: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -97,6 +138,7 @@ type TipInsert = {
   home_goals: number;
   away_goals: number;
   first_scorer?: string | null;
+  first_scorer_id?: number | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -144,6 +186,18 @@ export type Database = {
         Row: MatchRow;
         Insert: MatchInsert;
         Update: Partial<MatchInsert>;
+        Relationships: [];
+      };
+      teams: {
+        Row: TeamRow;
+        Insert: TeamInsert;
+        Update: Partial<TeamInsert>;
+        Relationships: [];
+      };
+      players: {
+        Row: PlayerRow;
+        Insert: PlayerInsert;
+        Update: Partial<PlayerInsert>;
         Relationships: [];
       };
       tips: {

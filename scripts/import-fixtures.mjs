@@ -86,12 +86,33 @@ if (fixtures.length === 0) {
   process.exit(0);
 }
 
+// Unique-Teams für teams-Upsert sammeln (eine Row pro Team).
+const teamMap = new Map();
+for (const f of fixtures) {
+  for (const side of ['home', 'away']) {
+    const t = f.teams?.[side];
+    if (!t?.id) continue;
+    if (!teamMap.has(t.id)) {
+      teamMap.set(t.id, {
+        id: t.id,
+        name: t.name ?? 'TBD',
+        code: null,
+        logo_url: t.logo ?? null,
+        tournament: TOURNAMENT_TAG,
+      });
+    }
+  }
+}
+const teams = Array.from(teamMap.values());
+
 const rows = fixtures.map((f) => ({
   id: f.fixture.id,
   tournament: TOURNAMENT_TAG,
   kickoff_at: f.fixture.date,
   home_team: f.teams.home?.name ?? 'TBD',
   away_team: f.teams.away?.name ?? 'TBD',
+  home_team_id: f.teams.home?.id ?? null,
+  away_team_id: f.teams.away?.id ?? null,
   home_team_code: null,
   away_team_code: null,
   stage: f.league?.round ?? null,
@@ -102,10 +123,15 @@ const rows = fixtures.map((f) => ({
   updated_at: new Date().toISOString(),
 }));
 
-console.log(`→ Supabase upsert: ${rows.length} matches`);
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+
+console.log(`→ Supabase upsert: ${teams.length} teams`);
+const { error: teamsErr } = await supabase.from('teams').upsert(teams, { onConflict: 'id' });
+if (teamsErr) throw new Error(`teams upsert error: ${teamsErr.message}`);
+
+console.log(`→ Supabase upsert: ${rows.length} matches`);
 const { error } = await supabase.from('matches').upsert(rows, { onConflict: 'id' });
 if (error) throw new Error(`Supabase upsert error: ${error.message}`);
 
 const { count } = await supabase.from('matches').select('*', { count: 'exact', head: true });
-console.log(`✓ done — matches-Tabelle enthält jetzt ${count} Zeilen`);
+console.log(`✓ done — matches-Tabelle enthält jetzt ${count} Zeilen, teams ${teams.length}`);

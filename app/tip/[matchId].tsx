@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -7,11 +7,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PickerGroup, PickerPlayer, PlayerPicker } from '@/components/player-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -25,6 +25,8 @@ type Match = {
   kickoff_at: string;
   home_team: string;
   away_team: string;
+  home_team_id: number | null;
+  away_team_id: number | null;
   stage: string | null;
   status: string;
   home_goals: number | null;
@@ -47,7 +49,9 @@ export default function TipScreen() {
   const [match, setMatch] = useState<Match | null>(null);
   const [home, setHome] = useState(0);
   const [away, setAway] = useState(0);
-  const [firstScorer, setFirstScorer] = useState('');
+  const [scorer, setScorer] = useState<PickerPlayer | null>(null);
+  const [squads, setSquads] = useState<PickerGroup[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,14 +64,39 @@ export default function TipScreen() {
 
       const { data: m } = await supabase
         .from('matches')
-        .select('id, tournament, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+        .select(
+          'id, tournament, kickoff_at, home_team, away_team, home_team_id, away_team_id, stage, status, home_goals, away_goals',
+        )
         .eq('id', numericId)
         .maybeSingle();
       setMatch(m);
 
+      // Kader beider Teams ziehen. Client-seitig in Gruppen pro Team splitten.
+      if (m?.home_team_id && m?.away_team_id) {
+        const { data: playerRows } = await supabase
+          .from('players')
+          .select('id, team_id, name, number, position')
+          .in('team_id', [m.home_team_id, m.away_team_id])
+          .order('number', { ascending: true, nullsFirst: false });
+
+        const groups: PickerGroup[] = [
+          {
+            teamId: m.home_team_id,
+            teamName: m.home_team,
+            players: (playerRows ?? []).filter((p) => p.team_id === m.home_team_id),
+          },
+          {
+            teamId: m.away_team_id,
+            teamName: m.away_team,
+            players: (playerRows ?? []).filter((p) => p.team_id === m.away_team_id),
+          },
+        ];
+        setSquads(groups);
+      }
+
       const { data: tip } = await supabase
         .from('tips')
-        .select('home_goals, away_goals, first_scorer')
+        .select('home_goals, away_goals, first_scorer, first_scorer_id')
         .eq('user_id', user.id)
         .eq('match_id', numericId)
         .maybeSingle();
@@ -75,7 +104,16 @@ export default function TipScreen() {
       if (tip) {
         setHome(tip.home_goals);
         setAway(tip.away_goals);
-        setFirstScorer(tip.first_scorer ?? '');
+        if (tip.first_scorer_id) {
+          // Name gleich aus den squads auflösen, sobald die geladen sind (async race ok,
+          // weil setSquads vorher läuft).
+          const { data: p } = await supabase
+            .from('players')
+            .select('id, name, number, position')
+            .eq('id', tip.first_scorer_id)
+            .maybeSingle();
+          if (p) setScorer(p);
+        }
       }
       setLoading(false);
     })();
@@ -84,6 +122,11 @@ export default function TipScreen() {
   const tippable = match
     ? match.tournament !== LIVE_TOURNAMENT || isBeforeKickoff(match.kickoff_at)
     : false;
+
+  const squadsLoaded = useMemo(
+    () => squads.some((g) => g.players.length > 0),
+    [squads],
+  );
 
   const submit = async () => {
     if (!user || !match) return;
@@ -95,7 +138,8 @@ export default function TipScreen() {
         match_id: match.id,
         home_goals: home,
         away_goals: away,
-        first_scorer: firstScorer.trim() || null,
+        first_scorer: scorer?.name ?? null,
+        first_scorer_id: scorer?.id ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'user_id,match_id' },
@@ -173,19 +217,44 @@ export default function TipScreen() {
               <ThemedText style={[styles.label, { color: c.textFaint }]}>
                 Torschütze (optional, +3 Bonus)
               </ThemedText>
-              <TextInput
-                style={[
-                  styles.input,
-                  { color: c.text, backgroundColor: c.surface, borderColor: c.border },
-                ]}
-                placeholder="z.B. Musiala"
-                placeholderTextColor={c.textFaint}
-                value={firstScorer}
-                onChangeText={setFirstScorer}
-                autoCapitalize="words"
-                autoCorrect={false}
-                editable={!saving}
-              />
+
+              <Pressable
+                onPress={() => squadsLoaded && setPickerOpen(true)}
+                disabled={!squadsLoaded || saving}
+                style={({ pressed }) => [
+                  styles.pickerField,
+                  {
+                    backgroundColor: c.surface,
+                    borderColor: scorer ? c.accent : c.border,
+                    opacity: pressed ? 0.8 : 1,
+                  },
+                ]}>
+                {scorer ? (
+                  <View style={styles.pickerSelected}>
+                    <ThemedText style={{ color: c.text, fontSize: FontSize.md, fontWeight: FontWeight.semibold }}>
+                      {scorer.name}
+                    </ThemedText>
+                    <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs }}>
+                      {scorer.number ? `#${scorer.number}` : ''}
+                      {scorer.number && scorer.position ? ' · ' : ''}
+                      {scorer.position ?? ''}
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <ThemedText style={{ color: c.textFaint, fontSize: FontSize.md }}>
+                    {squadsLoaded ? 'Spieler auswählen…' : 'Keine Kader in der DB'}
+                  </ThemedText>
+                )}
+                <ThemedText style={{ color: c.textMuted, fontSize: FontSize.md }}>
+                  {scorer ? '›' : '›'}
+                </ThemedText>
+              </Pressable>
+
+              {!squadsLoaded ? (
+                <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs, marginTop: Spacing.xs }}>
+                  Kader nicht importiert. Lauf `node scripts/import-squads.mjs` lokal.
+                </ThemedText>
+              ) : null}
 
               {error && <ThemedText style={[styles.error, { color: c.danger }]}>{error}</ThemedText>}
 
@@ -227,6 +296,14 @@ export default function TipScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <PlayerPicker
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={setScorer}
+        groups={squads}
+        selectedId={scorer?.id ?? null}
+      />
     </SafeAreaView>
   );
 }
@@ -342,13 +419,17 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     fontWeight: FontWeight.semibold,
   },
-  input: {
+  pickerField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
-    fontSize: FontSize.md,
+    minHeight: 54,
   },
+  pickerSelected: { flex: 1, gap: 2 },
   primaryBtn: {
     marginTop: Spacing.xl,
     borderRadius: Radius.md,

@@ -35,6 +35,7 @@ type Tip = {
   match_id: number;
   home_goals: number;
   away_goals: number;
+  points: number | null;
 };
 
 type Section = { title: string; data: Match[] };
@@ -74,12 +75,23 @@ export default function MatchesScreen() {
     setMatches(data ?? []);
 
     if (user) {
-      const { data: tipData } = await supabase
-        .from('tips')
-        .select('match_id, home_goals, away_goals')
-        .eq('user_id', user.id);
+      const [{ data: tipData }, { data: scoredData }] = await Promise.all([
+        supabase
+          .from('tips')
+          .select('match_id, home_goals, away_goals')
+          .eq('user_id', user.id),
+        supabase
+          .from('scored_tips')
+          .select('match_id, total_points')
+          .eq('user_id', user.id),
+      ]);
+      const pointsByMatch = new Map<number, number>();
+      for (const s of scoredData ?? []) pointsByMatch.set(s.match_id, s.total_points ?? 0);
+
       const map = new Map<number, Tip>();
-      for (const t of tipData ?? []) map.set(t.match_id, t);
+      for (const t of tipData ?? []) {
+        map.set(t.match_id, { ...t, points: pointsByMatch.get(t.match_id) ?? null });
+      }
       setTips(map);
     }
     setLoading(false);
@@ -171,10 +183,22 @@ export default function MatchesScreen() {
                   </ThemedText>
                 ) : null}
                 {tip ? (
-                  <View style={[styles.tipPill, { borderColor: c.accent }]}>
-                    <ThemedText style={{ color: c.accent, fontSize: FontSize.xs, fontWeight: FontWeight.semibold }}>
-                      {tip.home_goals}:{tip.away_goals}
-                    </ThemedText>
+                  <View style={styles.tipStack}>
+                    <View style={[styles.tipPill, { borderColor: c.accent }]}>
+                      <ThemedText style={{ color: c.accent, fontSize: FontSize.xs, fontWeight: FontWeight.semibold }}>
+                        {tip.home_goals}:{tip.away_goals}
+                      </ThemedText>
+                    </View>
+                    {tip.points !== null ? (
+                      <ThemedText
+                        style={{
+                          color: tip.points > 0 ? c.accent : c.textFaint,
+                          fontSize: FontSize.xs,
+                          fontWeight: FontWeight.bold,
+                        }}>
+                        +{tip.points} Pkt
+                      </ThemedText>
+                    ) : null}
                   </View>
                 ) : tippable ? (
                   <View style={[styles.tipPill, { borderColor: c.textFaint }]}>
@@ -242,5 +266,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: Radius.pill,
     borderWidth: 1,
+  },
+  tipStack: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
 });

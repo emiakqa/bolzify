@@ -37,6 +37,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="my-tips"
+        options={{
+          title: 'Meine Tipps',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="checklist" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="leagues"
         options={{
           title: 'Ligen',

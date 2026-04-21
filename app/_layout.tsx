@@ -2,11 +2,12 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, isPlaceholderUsername, useAuth } from '@/lib/auth';
+import { clearAllReminders, syncReminders } from '@/lib/notifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -35,6 +36,22 @@ function AuthGate() {
 
     if (onLogin || onSetUsername) router.replace('/');
   }, [loading, session, profile, segments, router]);
+
+  // Notification-Sync: plant Reminders 1h vor Kickoff für alle untippten Matches.
+  // Läuft einmal bei Login und jedes Mal, wenn die App aus dem Hintergrund kommt
+  // (falls der User in der Zwischenzeit woanders getippt hat).
+  const userId = session?.user?.id ?? null;
+  useEffect(() => {
+    if (!userId) {
+      clearAllReminders().catch(() => {});
+      return;
+    }
+    syncReminders(userId).catch(() => {});
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') syncReminders(userId).catch(() => {});
+    });
+    return () => sub.remove();
+  }, [userId]);
 
   if (loading) {
     return (

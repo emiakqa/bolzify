@@ -17,6 +17,7 @@ import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/desig
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { formatKickoffDate, formatKickoffTime, isBeforeKickoff } from '@/lib/format';
+import { cancelReminder } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 
 type Match = {
@@ -150,6 +151,8 @@ export default function TipScreen() {
       return;
     }
     setSaved(true);
+    // Reminder für dieses Match entfernen — wir haben ja jetzt getippt.
+    cancelReminder(match.id).catch(() => {});
     setTimeout(() => router.back(), 600);
   };
 

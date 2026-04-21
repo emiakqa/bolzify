@@ -18,7 +18,18 @@ import { supabase } from './supabase';
 
 const REMINDER_LEAD_MS = 60 * 60 * 1000; // 1h vor Kickoff
 const STORAGE_KEY = 'bolzify.reminders.v1'; // JSON: { [matchId]: notificationId }
+const ENABLED_KEY = 'bolzify.reminders.enabled.v1'; // '1' (default) oder '0'
 const MAX_SCHEDULE = 50; // iOS-Limit: 64 pending, Android: pragmatisch
+
+// User-Toggle aus dem Settings-Screen. Default an.
+export async function getRemindersEnabled(): Promise<boolean> {
+  const v = await AsyncStorage.getItem(ENABLED_KEY);
+  return v !== '0';
+}
+
+export async function setRemindersEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(ENABLED_KEY, enabled ? '1' : '0');
+}
 
 type ReminderMap = Record<string, string>;
 
@@ -94,6 +105,13 @@ type MatchRow = {
 export async function syncReminders(
   userId: string,
 ): Promise<{ scheduled: number; skipped: number; granted: boolean }> {
+  // Wenn User in den Settings deaktiviert hat: alles weg und raus.
+  const enabled = await getRemindersEnabled();
+  if (!enabled) {
+    await clearAllReminders();
+    return { scheduled: 0, skipped: 0, granted: true };
+  }
+
   const granted = await ensureNotificationSetup();
   if (!granted) return { scheduled: 0, skipped: 0, granted: false };
 

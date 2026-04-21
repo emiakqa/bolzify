@@ -137,9 +137,13 @@ export default function LeaguesScreen() {
             <ActivityIndicator color={c.textMuted} />
           </View>
         ) : leagues.length === 0 ? (
-          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border, alignItems: 'center' }]}>
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: c.surface, borderColor: c.border, alignItems: 'center', gap: Spacing.md },
+            ]}>
             <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
-              Noch keine Liga.{'\n'}Erstelle eine oder tritt per Code bei.
+              Noch keine Liga.{'\n'}Nutze die Buttons oben, um zu starten.
             </ThemedText>
           </View>
         ) : (

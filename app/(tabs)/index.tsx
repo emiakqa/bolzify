@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -11,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
@@ -39,7 +41,7 @@ type LeaguePreview = {
 };
 
 export default function HomeScreen() {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile } = useAuth();
   const router = useRouter();
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
@@ -144,8 +146,22 @@ export default function HomeScreen() {
               @{profile?.username ?? '—'}
             </ThemedText>
           </View>
-          <Pressable onPress={signOut} hitSlop={12}>
-            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.sm }}>Logout</ThemedText>
+          <Pressable
+            onPress={() => router.push('/settings')}
+            hitSlop={12}
+            style={({ pressed }) => [
+              styles.settingsBtn,
+              { borderColor: c.border, backgroundColor: c.surface, opacity: pressed ? 0.7 : 1 },
+            ]}>
+            {profile?.avatar_url ? (
+              <Image
+                source={{ uri: profile.avatar_url }}
+                style={styles.settingsAvatar}
+                contentFit="cover"
+              />
+            ) : (
+              <IconSymbol name="gearshape.fill" size={22} color={c.textMuted} />
+            )}
           </Pressable>
         </View>
 
@@ -181,16 +197,43 @@ export default function HomeScreen() {
         </View>
 
         {myLeagues.length === 0 ? (
-          <Pressable
-            onPress={() => router.push('/(tabs)/leagues')}
-            style={({ pressed }) => [
-              styles.card,
-              { backgroundColor: c.surface, borderColor: c.border, alignItems: 'center', opacity: pressed ? 0.85 : 1 },
-            ]}>
+          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
             <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
-              Noch keine Liga.{'\n'}Tippen zum Erstellen oder Beitreten.
+              Noch keine Liga.{'\n'}Leg eine an oder tritt per Code bei.
             </ThemedText>
-          </Pressable>
+            <View style={styles.ctaRow}>
+              <Pressable
+                onPress={() => router.push('/leagues-new')}
+                style={({ pressed }) => [
+                  styles.ctaPrimary,
+                  { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
+                ]}>
+                <ThemedText
+                  style={{
+                    color: c.accentFg,
+                    fontWeight: FontWeight.semibold,
+                    fontSize: FontSize.sm,
+                  }}>
+                  Liga erstellen
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/leagues-join')}
+                style={({ pressed }) => [
+                  styles.ctaSecondary,
+                  { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
+                ]}>
+                <ThemedText
+                  style={{
+                    color: c.text,
+                    fontWeight: FontWeight.semibold,
+                    fontSize: FontSize.sm,
+                  }}>
+                  Beitreten
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
         ) : (
           myLeagues.map((l) => (
             <Pressable
@@ -293,6 +336,34 @@ const styles = StyleSheet.create({
   },
   hi: { fontSize: FontSize.sm },
   username: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, marginTop: 2 },
+  settingsBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  settingsAvatar: { width: '100%', height: '100%' },
+  ctaRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  ctaPrimary: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+  },
+  ctaSecondary: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
   sectionLabel: {
     fontSize: FontSize.xs,
     textTransform: 'uppercase',

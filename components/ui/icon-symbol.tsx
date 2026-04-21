@@ -19,6 +19,7 @@ const MAPPING = {
   'list.bullet': 'format-list-bulleted',
   'checklist': 'checklist',
   'person.3.fill': 'groups',
+  'gearshape.fill': 'settings',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
 } as IconMapping;

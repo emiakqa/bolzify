@@ -223,6 +223,10 @@ export type Database = {
         Args: { p_match_id: number };
         Returns: number;
       };
+      delete_own_account: {
+        Args: Record<string, never>;
+        Returns: void;
+      };
     };
     Enums: {};
     CompositeTypes: {};

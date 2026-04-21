@@ -179,8 +179,23 @@ export default function MyTipsScreen() {
         ListEmptyComponent={
           <View style={[styles.empty, { backgroundColor: c.surface, borderColor: c.border }]}>
             <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
-              Du hast noch keinen Tipp abgegeben.{'\n'}Geh zum Spielplan und leg los.
+              Du hast noch keinen Tipp abgegeben.
             </ThemedText>
+            <Pressable
+              onPress={() => router.push('/(tabs)/matches')}
+              style={({ pressed }) => [
+                styles.emptyCta,
+                { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
+              ]}>
+              <ThemedText
+                style={{
+                  color: c.accentFg,
+                  fontSize: FontSize.md,
+                  fontWeight: FontWeight.semibold,
+                }}>
+                Zum Spielplan
+              </ThemedText>
+            </Pressable>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -297,6 +312,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     padding: Spacing.xl,
+    alignItems: 'center',
+    gap: Spacing.lg,
+  },
+  emptyCta: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
   },
   sectionHeader: {
     paddingVertical: Spacing.sm,

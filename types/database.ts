@@ -214,7 +214,16 @@ export type Database = {
       };
     };
     Views: {};
-    Functions: {};
+    Functions: {
+      join_league_by_code: {
+        Args: { p_code: string };
+        Returns: { league_id: string; league_name: string }[];
+      };
+      score_match: {
+        Args: { p_match_id: number };
+        Returns: number;
+      };
+    };
     Enums: {};
     CompositeTypes: {};
   };

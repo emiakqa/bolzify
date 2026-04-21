@@ -36,6 +36,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="list.bullet" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="leagues"
+        options={{
+          title: 'Ligen',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="person.3.fill" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

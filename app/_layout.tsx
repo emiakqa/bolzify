@@ -50,6 +50,9 @@ function AuthGate() {
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="set-username" options={{ headerShown: false }} />
       <Stack.Screen name="tip/[matchId]" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="leagues-new" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="leagues-join" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="leagues/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
     </Stack>
   );

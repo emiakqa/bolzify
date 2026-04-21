@@ -32,6 +32,12 @@ type Tip = {
   away_goals: number;
 };
 
+type LeaguePreview = {
+  id: string;
+  name: string;
+  member_count: number;
+};
+
 export default function HomeScreen() {
   const { user, profile, signOut } = useAuth();
   const router = useRouter();
@@ -40,6 +46,7 @@ export default function HomeScreen() {
 
   const [nextMatch, setNextMatch] = useState<Match | null>(null);
   const [nextMatchTip, setNextMatchTip] = useState<Tip | null>(null);
+  const [myLeagues, setMyLeagues] = useState<LeaguePreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -78,6 +85,32 @@ export default function HomeScreen() {
       setNextMatchTip(tip ?? null);
     } else {
       setNextMatchTip(null);
+    }
+
+    // Meine Ligen (Preview — max 3 auf Home)
+    if (user) {
+      const { data: memberRows } = await supabase
+        .from('league_members')
+        .select('league_id')
+        .eq('user_id', user.id);
+      const ids = (memberRows ?? []).map((r) => r.league_id);
+      if (ids.length > 0) {
+        const { data: lgs } = await supabase
+          .from('leagues')
+          .select('id, name')
+          .in('id', ids)
+          .order('created_at', { ascending: false })
+          .limit(3);
+        const { data: counts } = await supabase
+          .from('league_members')
+          .select('league_id')
+          .in('league_id', ids);
+        const countMap = new Map<string, number>();
+        for (const row of counts ?? []) countMap.set(row.league_id, (countMap.get(row.league_id) ?? 0) + 1);
+        setMyLeagues((lgs ?? []).map((l) => ({ ...l, member_count: countMap.get(l.id) ?? 1 })));
+      } else {
+        setMyLeagues([]);
+      }
     }
 
     setLoading(false);
@@ -138,14 +171,47 @@ export default function HomeScreen() {
           />
         )}
 
-        <ThemedText style={[styles.sectionLabel, { color: c.textFaint, marginTop: Spacing.xl }]}>
-          Deine Liga
-        </ThemedText>
-        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border, alignItems: 'center' }]}>
-          <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
-            Noch keine Liga.{'\n'}Liga-Feature kommt in Woche 2.
-          </ThemedText>
+        <View style={styles.ligaHeader}>
+          <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Deine Ligen</ThemedText>
+          <Pressable onPress={() => router.push('/(tabs)/leagues')} hitSlop={8}>
+            <ThemedText style={{ color: c.accent, fontSize: FontSize.xs, fontWeight: FontWeight.semibold }}>
+              Alle ›
+            </ThemedText>
+          </Pressable>
         </View>
+
+        {myLeagues.length === 0 ? (
+          <Pressable
+            onPress={() => router.push('/(tabs)/leagues')}
+            style={({ pressed }) => [
+              styles.card,
+              { backgroundColor: c.surface, borderColor: c.border, alignItems: 'center', opacity: pressed ? 0.85 : 1 },
+            ]}>
+            <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
+              Noch keine Liga.{'\n'}Tippen zum Erstellen oder Beitreten.
+            </ThemedText>
+          </Pressable>
+        ) : (
+          myLeagues.map((l) => (
+            <Pressable
+              key={l.id}
+              onPress={() => router.push({ pathname: '/leagues/[id]', params: { id: l.id } })}
+              style={({ pressed }) => [
+                styles.ligaRow,
+                { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.85 : 1 },
+              ]}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={{ color: c.text, fontSize: FontSize.md, fontWeight: FontWeight.semibold }}>
+                  {l.name}
+                </ThemedText>
+                <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs, marginTop: 2 }}>
+                  {l.member_count} {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'}
+                </ThemedText>
+              </View>
+              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.md }}>›</ThemedText>
+            </Pressable>
+          ))
+        )}
 
         <ThemedText style={[styles.footer, { color: c.textFaint }]}>
           {user?.email}
@@ -233,6 +299,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: Spacing.sm,
     fontWeight: FontWeight.semibold,
+  },
+  ligaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.xl,
+  },
+  ligaRow: {
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
   },
   card: {
     borderRadius: Radius.lg,

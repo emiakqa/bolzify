@@ -17,6 +17,7 @@ import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/desig
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
+import { getCurrentTournament } from '@/lib/current-tournament';
 import { formatCountdown, formatKickoffDate, formatKickoffTime } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
@@ -59,6 +60,10 @@ export default function HomeScreen() {
   const [nextMatchTip, setNextMatchTip] = useState<Tip | null>(null);
   const [myLeagues, setMyLeagues] = useState<LeaguePreview[]>([]);
   const [specialStatus, setSpecialStatus] = useState<SpecialTipsStatus>({ filled: 0, total: 5 });
+  // Aktuelle Sondertipp-Punkte (kommt erst nach Halbfinale/Final via Trigger).
+  // null = scored_special_tips Row existiert noch nicht (Turnier nicht
+  // entscheidungsrelevant fortgeschritten). 0+ = Engine hat bereits gescored.
+  const [specialPoints, setSpecialPoints] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -125,15 +130,18 @@ export default function HomeScreen() {
       setNextMatchTip(null);
     }
 
-    // Sondertipps-Status (für Home-Card).
+    // Sondertipps-Status (für Home-Card). Turnier dynamisch resolven — so
+    // funktioniert die Anzeige gegen WM2022-Dev-Daten und springt automatisch
+    // auf WM2026 um, sobald die Fixtures importiert sind.
     if (userId) {
+      const tournament = await getCurrentTournament();
       const { data: special } = await supabase
         .from('special_tips')
         .select(
           'champion_team_id, runner_up_team_id, semifinalist_a_team_id, semifinalist_b_team_id, top_scorer_player_id',
         )
         .eq('user_id', userId)
-        .eq('tournament', 'WM2026')
+        .eq('tournament', tournament)
         .maybeSingle();
       if (special) {
         const filled = [
@@ -147,6 +155,16 @@ export default function HomeScreen() {
       } else {
         setSpecialStatus({ filled: 0, total: 5 });
       }
+
+      // Aktuelle Sondertipp-Punkte. Wird via DB-Trigger gesetzt sobald HF/Final
+      // gespielt sind. Vorher: keine Row → null → wir zeigen den Filled-Status.
+      const { data: scoredSpecial } = await supabase
+        .from('scored_special_tips')
+        .select('total_points')
+        .eq('user_id', userId)
+        .eq('tournament', tournament)
+        .maybeSingle();
+      setSpecialPoints(scoredSpecial?.total_points ?? null);
     }
 
     // Meine Ligen (Preview — max 3 auf Home)
@@ -279,6 +297,18 @@ export default function HomeScreen() {
                 : `${specialStatus.filled} von ${specialStatus.total} Feldern ausgefüllt`}
             </ThemedText>
           </View>
+          {specialPoints !== null && specialPoints > 0 ? (
+            <View style={[styles.specialPointsBadge, { borderColor: c.accent }]}>
+              <ThemedText
+                style={{
+                  color: c.accent,
+                  fontSize: FontSize.xs,
+                  fontWeight: FontWeight.bold,
+                }}>
+                {specialPoints} Pkt
+              </ThemedText>
+            </View>
+          ) : null}
           <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>›</ThemedText>
         </Pressable>
 
@@ -544,6 +574,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+  },
+  specialPointsBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
   },
   ligaRow: {
     borderRadius: Radius.md,

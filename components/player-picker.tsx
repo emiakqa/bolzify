@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -34,24 +34,142 @@ type Props = {
   selectedId: number | null;
 };
 
+// Unicode-Folding für Suche: Groß/klein, Diakritika und Sonder-Buchstaben,
+// die NFD nicht zerlegt (Türkisch ı, Polnisch ł, Deutsch ß, Skandinavisch ø/æ usw.).
+// Ohne das findet "Yildiz" den Spieler "K. Yıldız" nicht.
+function fold(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/ı/g, 'i')
+    .replace(/ł/g, 'l')
+    .replace(/ø/g, 'o')
+    .replace(/ß/g, 'ss')
+    .replace(/æ/g, 'ae')
+    .replace(/œ/g, 'oe')
+    .replace(/þ/g, 'th')
+    .replace(/đ/g, 'd');
+}
+
+// Substring-Match auf foldeten Vollnamen — der "harte" Match. Findet
+// "Yıldız" in "K. Yıldız", "Müller" in "T. Müller" etc.
+function matchesSubstring(foldedName: string, foldedQuery: string): boolean {
+  return foldedName.includes(foldedQuery);
+}
+
+// Multi-Token-Match mit Initial-Expansion. Greift wenn der User Vor- + Nachname
+// tippt und api-football den Vornamen abgekürzt hat ("A. Güler" für "Arda
+// Güler"). Jedes Query-Token muss ein Player-Token treffen — entweder via
+// Substring oder weil das Player-Token ein Initial ist und das Query-Token
+// mit diesem Buchstaben beginnt.
+function matchesMultiToken(foldedName: string, qTokens: string[]): boolean {
+  const pTokens = foldedName.split(/\s+/).filter(Boolean);
+  return qTokens.every((qt) =>
+    pTokens.some((pt) => {
+      if (pt.includes(qt)) return true;
+      const clean = pt.replace(/\./g, '');
+      if (clean.length === 1 && qt.startsWith(clean)) return true;
+      return false;
+    }),
+  );
+}
+
+// Single-Token-Initial-Match. Greift wenn der User einen einzelnen Vornamen
+// tippt ("Kenan") und kein Spieler diesen Namen ausgeschrieben enthält —
+// dann sind Spieler mit passender Vornamen-Initiale ("K. Yıldız") die einzige
+// realistische Treffermenge. Wird vom sections-useMemo als FALLBACK verwendet,
+// damit "Yildiz" nicht versehentlich Y.-Abkürzungen wie "Y. Meriah" matcht.
+function matchesFirstNameInitial(foldedName: string, foldedQuery: string): boolean {
+  const pTokens = foldedName.split(/\s+/).filter(Boolean);
+  if (pTokens.length < 2) return false;
+  const clean = pTokens[0].replace(/\./g, '');
+  return clean.length === 1 && foldedQuery.startsWith(clean);
+}
+
 export function PlayerPicker({ visible, onClose, onSelect, groups, selectedId }: Props) {
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
   const [query, setQuery] = useState('');
+  // Manuell aufgeklappte Teams. Bei Suche ignoriert — dann werden alle Teams
+  // mit Treffern automatisch aufgeklappt.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  // State zurücksetzen wenn der Modal zu geht — frischer Start beim nächsten Open.
+  useEffect(() => {
+    if (!visible) {
+      setQuery('');
+      setExpanded(new Set());
+    }
+  }, [visible]);
+
+  const hasQuery = query.trim().length > 0;
 
   const sections = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return groups.map((g) => ({
-      title: g.teamName,
-      teamId: g.teamId,
-      data: q ? g.players.filter((p) => p.name.toLowerCase().includes(q)) : g.players,
-    }));
-  }, [groups, query]);
+    // Ohne Suche: alle Team-Header zeigen, Spieler nur bei manuell aufgeklappten.
+    if (!hasQuery) {
+      return groups.map((g) => {
+        const showPlayers = expanded.has(g.teamId);
+        return {
+          title: g.teamName,
+          teamId: g.teamId,
+          total: g.players.length,
+          isExpanded: showPlayers,
+          data: showPlayers ? g.players : [],
+        };
+      });
+    }
+
+    // Mit Suche: Strategie GLOBAL entscheiden, dann pro Team filtern.
+    const q = fold(query).trim();
+    const qTokens = q.split(/\s+/).filter(Boolean);
+
+    let predicate: (foldedName: string) => boolean;
+
+    if (qTokens.length >= 2) {
+      // Multi-Token: Substring-Schnellpfad ODER all-tokens-match mit Initialen.
+      predicate = (foldedName) =>
+        matchesSubstring(foldedName, q) || matchesMultiToken(foldedName, qTokens);
+    } else {
+      // Single-Token: Substring zuerst probieren. Nur wenn GAR NIRGENDS ein
+      // Substring-Treffer existiert, fallback auf Initial-Expansion (User
+      // tippt vermutlich einen Vornamen → Spieler hat ihn als "K." abgekürzt).
+      const hasAnySubstring = groups.some((g) =>
+        g.players.some((p) => matchesSubstring(fold(p.name), q)),
+      );
+      if (hasAnySubstring) {
+        predicate = (foldedName) => matchesSubstring(foldedName, q);
+      } else {
+        predicate = (foldedName) => matchesFirstNameInitial(foldedName, q);
+      }
+    }
+
+    return groups
+      .map((g) => {
+        const matching = g.players.filter((p) => predicate(fold(p.name)));
+        return {
+          title: g.teamName,
+          teamId: g.teamId,
+          total: matching.length,
+          isExpanded: true, // Suche klappt automatisch alle Treffer-Teams auf
+          data: matching,
+        };
+      })
+      .filter((s) => s.total > 0);
+  }, [groups, query, expanded, hasQuery]);
 
   const pick = (p: PickerPlayer | null) => {
     onSelect(p);
     onClose();
-    setQuery('');
+  };
+
+  const toggleTeam = (teamId: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
   };
 
   return (
@@ -95,17 +213,44 @@ export function PlayerPicker({ visible, onClose, onSelect, groups, selectedId }:
           ) : null}
         </Pressable>
 
+        {!hasQuery ? (
+          <ThemedText
+            style={{
+              color: c.textFaint,
+              fontSize: FontSize.xs,
+              textAlign: 'center',
+              paddingHorizontal: Spacing.lg,
+              marginBottom: Spacing.sm,
+            }}>
+            Mannschaft antippen, um Spieler zu sehen — oder oben suchen.
+          </ThemedText>
+        ) : null}
+
         <SectionList
           sections={sections}
           keyExtractor={(p) => String(p.id)}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: Spacing.xxxl }}
           renderSectionHeader={({ section }) => (
-            <View style={[styles.sectionHeader, { backgroundColor: c.bg }]}>
+            <Pressable
+              onPress={() => !hasQuery && toggleTeam(section.teamId)}
+              disabled={hasQuery}
+              style={({ pressed }) => [
+                styles.sectionHeader,
+                {
+                  backgroundColor: c.bg,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}>
               <ThemedText style={[styles.sectionHeaderText, { color: c.nostalgia }]}>
                 {section.title}
               </ThemedText>
-            </View>
+              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>
+                {hasQuery
+                  ? `${section.total} ${section.total === 1 ? 'Treffer' : 'Treffer'}`
+                  : `${section.total} Spieler ${section.isExpanded ? '▾' : '▸'}`}
+              </ThemedText>
+            </Pressable>
           )}
           renderItem={({ item }) => {
             const active = item.id === selectedId;
@@ -145,8 +290,10 @@ export function PlayerPicker({ visible, onClose, onSelect, groups, selectedId }:
           }}
           ListEmptyComponent={
             <View style={{ padding: Spacing.xl, alignItems: 'center' }}>
-              <ThemedText style={{ color: c.textMuted }}>
-                Keine Spieler in der DB.{'\n'}Lauf `node scripts/import-squads.mjs` lokal.
+              <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
+                {hasQuery
+                  ? 'Kein Spieler passt zur Suche.'
+                  : 'Keine Spieler in der DB.\nLauf `node scripts/import-squads.mjs` lokal.'}
               </ThemedText>
             </View>
           }
@@ -191,6 +338,9 @@ const styles = StyleSheet.create({
   sectionHeader: {
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   sectionHeaderText: {
     fontSize: FontSize.xs,

@@ -96,15 +96,34 @@ export default function LeagueDetailScreen() {
     const pointsMap = new Map<string, { total: number; count: number }>();
 
     if (userIds.length > 0) {
-      const [{ data: profiles }, { data: scored }] = await Promise.all([
-        supabase.from('profiles').select('id, username').in('id', userIds),
-        supabase.from('scored_tips').select('user_id, total_points').in('user_id', userIds),
-      ]);
+      // scored_special_tips parallel mit holen — RLS lässt fremde Rows erst
+      // nach Sondertipp-Deadline (Turnierstart) durch, vorher kommen nur die
+      // eigenen zurück. Vor der WM also nur self → Liga-Ranking zeigt 0
+      // Sondertipp-Punkte für andere, das ist die intendierte Lock-Phase.
+      const [{ data: profiles }, { data: scored }, { data: scoredSpecial }] =
+        await Promise.all([
+          supabase.from('profiles').select('id, username').in('id', userIds),
+          supabase
+            .from('scored_tips')
+            .select('user_id, total_points')
+            .in('user_id', userIds),
+          supabase
+            .from('scored_special_tips')
+            .select('user_id, total_points')
+            .in('user_id', userIds),
+        ]);
       for (const p of profiles ?? []) profileMap.set(p.id, p.username);
       for (const s of scored ?? []) {
         const cur = pointsMap.get(s.user_id) ?? { total: 0, count: 0 };
         cur.total += s.total_points ?? 0;
         cur.count += 1;
+        pointsMap.set(s.user_id, cur);
+      }
+      // scored_count zählen wir bewusst NICHT für Sondertipps mit — der
+      // „N Tipps gewertet"-Subtitle bezieht sich nur auf Match-Tipps.
+      for (const s of scoredSpecial ?? []) {
+        const cur = pointsMap.get(s.user_id) ?? { total: 0, count: 0 };
+        cur.total += s.total_points ?? 0;
         pointsMap.set(s.user_id, cur);
       }
     }

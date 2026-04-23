@@ -42,6 +42,9 @@ export default function MyTipsScreen() {
   const c = Colors[scheme];
 
   const [sections, setSections] = useState<Section[]>([]);
+  // Summe aller scored_special_tips.total_points über alle Turniere des Users.
+  // Wird zum Match-Punkte-Total addiert.
+  const [specialPoints, setSpecialPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -51,15 +54,30 @@ export default function MyTipsScreen() {
   const load = useCallback(async () => {
     if (!userId) {
       setSections([]);
+      setSpecialPoints(0);
       setLoading(false);
       return;
     }
+
+    // Sondertipp-Summe über alle Turniere parallel zur tips-Query holen
+    // — billig (max 1-2 Rows pro User) und unabhängig vom restlichen Flow.
+    const specialPromise = supabase
+      .from('scored_special_tips')
+      .select('total_points')
+      .eq('user_id', userId);
 
     // Alle eigenen Tipps + per IN-Filter Matches + scored_tips + Spielernamen.
     const { data: tipRows } = await supabase
       .from('tips')
       .select('match_id, home_goals, away_goals, first_scorer_id')
       .eq('user_id', userId);
+
+    const { data: specialRows } = await specialPromise;
+    const specialTotal = (specialRows ?? []).reduce(
+      (sum, r) => sum + (r.total_points ?? 0),
+      0,
+    );
+    setSpecialPoints(specialTotal);
 
     if (!tipRows || tipRows.length === 0) {
       setSections([]);
@@ -149,10 +167,11 @@ export default function MyTipsScreen() {
     );
   }
 
-  // Gesamtpunkte-Badge im Header (nur gescorde Tipps).
-  const totalPoints = sections
+  // Gesamtpunkte-Badge im Header: gescorde Match-Tipps + Sondertipps.
+  const matchPoints = sections
     .flatMap((s) => s.data)
     .reduce((sum, r) => sum + (r.points ?? 0), 0);
+  const totalPoints = matchPoints + specialPoints;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
@@ -164,19 +183,35 @@ export default function MyTipsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
         }
         ListHeaderComponent={
-          <View style={styles.headerRow}>
-            <ThemedText style={[styles.h1, { color: c.text }]}>Meine Tipps</ThemedText>
-            {totalPoints > 0 ? (
-              <View style={[styles.totalBadge, { borderColor: c.accent }]}>
-                <ThemedText
-                  style={{
-                    color: c.accent,
-                    fontSize: FontSize.sm,
-                    fontWeight: FontWeight.bold,
-                  }}>
-                  {totalPoints} Pkt
-                </ThemedText>
-              </View>
+          <View>
+            <View style={styles.headerRow}>
+              <ThemedText style={[styles.h1, { color: c.text }]}>Meine Tipps</ThemedText>
+              {totalPoints > 0 ? (
+                <View style={[styles.totalBadge, { borderColor: c.accent }]}>
+                  <ThemedText
+                    style={{
+                      color: c.accent,
+                      fontSize: FontSize.sm,
+                      fontWeight: FontWeight.bold,
+                    }}>
+                    {totalPoints} Pkt
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
+            {/* Aufschlüsselung nur zeigen wenn beide Quellen Punkte beigesteuert
+                haben — sonst ist die Summe = Match-Punkte und der Subtitle
+                wäre redundant. */}
+            {specialPoints > 0 && matchPoints > 0 ? (
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.xs,
+                  marginTop: -Spacing.md + 2,
+                  marginBottom: Spacing.lg,
+                }}>
+                {matchPoints} aus Spielen · {specialPoints} aus Sondertipps
+              </ThemedText>
             ) : null}
           </View>
         }

@@ -15,10 +15,10 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
+import { getCurrentTournament } from '@/lib/current-tournament';
 import { generateInviteCode } from '@/lib/invite';
 import { supabase } from '@/lib/supabase';
 
-const TOURNAMENT = 'WM2026';
 const MAX_INSERT_RETRIES = 3;
 
 export default function CreateLeagueScreen() {
@@ -44,6 +44,10 @@ export default function CreateLeagueScreen() {
 
     setSubmitting(true);
 
+    // Liga ans aktuell aktive Turnier binden — gegen WM2022-Dev-Daten = WM2022,
+    // nach WM2026-Fixture-Import automatisch WM2026.
+    const tournament = await getCurrentTournament();
+
     // Retry bei sehr unwahrscheinlichem Code-Kollisions-Fehler (unique constraint).
     let leagueId: string | null = null;
     for (let attempt = 0; attempt < MAX_INSERT_RETRIES; attempt++) {
@@ -54,7 +58,7 @@ export default function CreateLeagueScreen() {
           name: trimmed,
           invite_code: code,
           created_by: user.id,
-          tournament: TOURNAMENT,
+          tournament,
         })
         .select('id')
         .single();

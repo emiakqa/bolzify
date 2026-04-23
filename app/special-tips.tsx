@@ -16,9 +16,8 @@ import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/desig
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
+import { getCurrentTournament } from '@/lib/current-tournament';
 import { supabase } from '@/lib/supabase';
-
-const TOURNAMENT = 'WM2026';
 
 type Slot =
   | 'champion'
@@ -59,6 +58,10 @@ export default function SpecialTipsScreen() {
 
   const [teams, setTeams] = useState<PickerTeam[]>([]);
   const [playerGroups, setPlayerGroups] = useState<PickerGroup[]>([]);
+  // Aktives Turnier wird zur Laufzeit resolvt (nicht hardcoded), damit die
+  // Screen gegen WM2022-Dev-Daten funktioniert und nach dem WM2026-Import
+  // automatisch umschaltet.
+  const [tournament, setTournament] = useState<string | null>(null);
 
   const [state, setState] = useState<State>({
     champion: null,
@@ -74,9 +77,12 @@ export default function SpecialTipsScreen() {
     (async () => {
       if (!user) return;
 
+      const t = await getCurrentTournament();
+      setTournament(t);
+
       // Deadline prüfen — erster Anpfiff des Turniers.
       const { data: deadlineData } = await supabase.rpc('special_tips_deadline', {
-        p_tournament: TOURNAMENT,
+        p_tournament: t,
       });
       const deadlineIso: string | null = deadlineData ?? null;
       setDeadline(deadlineIso);
@@ -88,7 +94,7 @@ export default function SpecialTipsScreen() {
       const { data: teamRows } = await supabase
         .from('teams')
         .select('id, name, code')
-        .eq('tournament', TOURNAMENT);
+        .eq('tournament', t);
       const pickerTeams: PickerTeam[] = teamRows ?? [];
       setTeams(pickerTeams);
 
@@ -99,7 +105,7 @@ export default function SpecialTipsScreen() {
           'champion_team_id, runner_up_team_id, semifinalist_a_team_id, semifinalist_b_team_id, top_scorer_player_id',
         )
         .eq('user_id', user.id)
-        .eq('tournament', TOURNAMENT)
+        .eq('tournament', t)
         .maybeSingle();
 
       const teamById = new Map(pickerTeams.map((t) => [t.id, t]));
@@ -179,13 +185,13 @@ export default function SpecialTipsScreen() {
   };
 
   const submit = async () => {
-    if (!user) return;
+    if (!user || !tournament) return;
     setError(null);
     setSaving(true);
     const { error: err } = await supabase.from('special_tips').upsert(
       {
         user_id: user.id,
-        tournament: TOURNAMENT,
+        tournament,
         champion_team_id: state.champion?.id ?? null,
         runner_up_team_id: state.runner_up?.id ?? null,
         semifinalist_a_team_id: state.semifinalist_a?.id ?? null,

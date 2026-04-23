@@ -105,23 +105,36 @@ for (const f of fixtures) {
 }
 const teams = Array.from(teamMap.values());
 
-const rows = fixtures.map((f) => ({
-  id: f.fixture.id,
-  tournament: TOURNAMENT_TAG,
-  kickoff_at: f.fixture.date,
-  home_team: f.teams.home?.name ?? 'TBD',
-  away_team: f.teams.away?.name ?? 'TBD',
-  home_team_id: f.teams.home?.id ?? null,
-  away_team_id: f.teams.away?.id ?? null,
-  home_team_code: null,
-  away_team_code: null,
-  stage: f.league?.round ?? null,
-  status: mapStatus(f.fixture.status?.short ?? 'NS'),
-  home_goals: f.goals?.home ?? null,
-  away_goals: f.goals?.away ?? null,
-  first_scorer: null,
-  updated_at: new Date().toISOString(),
-}));
+const rows = fixtures.map((f) => {
+  // winner_team_id: api-football setzt teams.{home,away}.winner = true beim
+  // Sieger eines KO-Spiels. Bei Gruppen-Unentschieden sind beide false/null.
+  // Bei Gruppen-Siegen ist es auch true → wir setzen es trotzdem (schadet
+  // nicht, ist nur für KO relevant). Bei Elfmeterschießen liefert api-football
+  // den Sieger korrekt (z.B. WM2022-Final: home=Argentinien.winner=true,
+  // obwohl goals 3:3) — genau das brauchen wir für score_special_tips().
+  let winner_team_id = null;
+  if (f.teams.home?.winner === true) winner_team_id = f.teams.home.id ?? null;
+  else if (f.teams.away?.winner === true) winner_team_id = f.teams.away.id ?? null;
+
+  return {
+    id: f.fixture.id,
+    tournament: TOURNAMENT_TAG,
+    kickoff_at: f.fixture.date,
+    home_team: f.teams.home?.name ?? 'TBD',
+    away_team: f.teams.away?.name ?? 'TBD',
+    home_team_id: f.teams.home?.id ?? null,
+    away_team_id: f.teams.away?.id ?? null,
+    home_team_code: null,
+    away_team_code: null,
+    stage: f.league?.round ?? null,
+    status: mapStatus(f.fixture.status?.short ?? 'NS'),
+    home_goals: f.goals?.home ?? null,
+    away_goals: f.goals?.away ?? null,
+    winner_team_id,
+    first_scorer: null,
+    updated_at: new Date().toISOString(),
+  };
+});
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 

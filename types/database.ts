@@ -63,6 +63,7 @@ type MatchRow = {
   status: string;
   home_goals: number | null;
   away_goals: number | null;
+  winner_team_id: number | null;
   first_scorer: string | null;
   first_scorer_id: number | null;
   updated_at: string;
@@ -81,6 +82,7 @@ type MatchInsert = {
   status?: string;
   home_goals?: number | null;
   away_goals?: number | null;
+  winner_team_id?: number | null;
   first_scorer?: string | null;
   first_scorer_id?: number | null;
   updated_at?: string;
@@ -108,6 +110,7 @@ type PlayerRow = {
   number: number | null;
   position: string | null;
   photo_url: string | null;
+  tournament_goals: number;
   created_at: string;
 };
 type PlayerInsert = {
@@ -117,6 +120,7 @@ type PlayerInsert = {
   number?: number | null;
   position?: string | null;
   photo_url?: string | null;
+  tournament_goals?: number;
   created_at?: string;
 };
 
@@ -184,6 +188,28 @@ type SpecialTipInsert = {
   updated_at?: string;
 };
 
+type ScoredSpecialTipRow = {
+  user_id: string;
+  tournament: string;
+  champion_points: number;        // 0 oder 10
+  runner_up_points: number;       // 0 oder 5
+  semifinalist_hits: number;      // 0..4
+  semifinalist_points: number;    // = hits * 5
+  top_scorer_points: number;      // 0 oder 5
+  total_points: number;           // generated
+  scored_at: string;
+};
+type ScoredSpecialTipInsert = {
+  user_id: string;
+  tournament: string;
+  champion_points?: number;
+  runner_up_points?: number;
+  semifinalist_hits?: number;
+  semifinalist_points?: number;
+  top_scorer_points?: number;
+  scored_at?: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -241,6 +267,12 @@ export type Database = {
         Update: Partial<SpecialTipInsert>;
         Relationships: [];
       };
+      scored_special_tips: {
+        Row: ScoredSpecialTipRow;
+        Insert: ScoredSpecialTipInsert;
+        Update: Partial<ScoredSpecialTipInsert>;
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {
@@ -259,6 +291,10 @@ export type Database = {
       special_tips_deadline: {
         Args: { p_tournament: string };
         Returns: string | null;
+      };
+      score_special_tips: {
+        Args: { p_tournament: string };
+        Returns: number;
       };
     };
     Enums: {};

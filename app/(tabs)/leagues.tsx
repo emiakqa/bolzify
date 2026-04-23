@@ -34,15 +34,18 @@ export default function LeaguesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Dep auf user.id (Primitive), nicht user (Objekt) — sonst reloaded
+  // bei jedem Supabase-Session-Refresh.
+  const userId = user?.id ?? null;
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!userId) return;
 
     // Alle Ligen, in denen ich Member bin. RLS sorgt dafür, dass ich nur
     // die sehe, wo ich drin bin — kein zusätzlicher Filter nötig.
     const { data: memberRows, error: memErr } = await supabase
       .from('league_members')
       .select('league_id')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (memErr) {
       console.warn('leagues load error:', memErr.message);
@@ -88,7 +91,7 @@ export default function LeaguesScreen() {
       })),
     );
     setLoading(false);
-  }, [user]);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {

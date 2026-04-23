@@ -15,7 +15,8 @@ import {
   setRemindersEnabled,
   syncReminders,
 } from '@/lib/notifications';
-import { supabase } from '@/lib/supabase';
+import { resetOnboarding } from '@/lib/onboarding';
+import { clearLocalSession, supabase } from '@/lib/supabase';
 
 export default function SettingsScreen() {
   const { user, profile, signOut } = useAuth();
@@ -190,6 +191,66 @@ export default function SettingsScreen() {
             {deleting ? 'Lösche…' : 'Account löschen'}
           </ThemedText>
         </Pressable>
+
+        {__DEV__ ? (
+          <>
+            <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Dev</ThemedText>
+            <Pressable
+              onPress={async () => {
+                await resetOnboarding();
+                router.replace('/onboarding');
+              }}
+              style={({ pressed }) => [
+                styles.row,
+                {
+                  backgroundColor: c.surface,
+                  borderColor: c.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}>
+              <ThemedText
+                style={{
+                  color: c.text,
+                  fontSize: FontSize.md,
+                  fontWeight: FontWeight.medium,
+                  flex: 1,
+                }}>
+                Onboarding zurücksetzen
+              </ThemedText>
+              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>DEV</ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                // Direkter SecureStore-Wipe, umgeht Supabase's Auth-Lock.
+                // Nötig, wenn der Auth-Lock hängt und supabase.auth.signOut
+                // selbst nicht mehr zurückkommt.
+                await clearLocalSession();
+                Alert.alert(
+                  'Session gelöscht',
+                  'Bitte App im Task-Switcher komplett schließen und neu öffnen, damit Supabase sauber neu initialisiert.',
+                );
+              }}
+              style={({ pressed }) => [
+                styles.row,
+                {
+                  backgroundColor: c.surface,
+                  borderColor: c.danger,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}>
+              <ThemedText
+                style={{
+                  color: c.danger,
+                  fontSize: FontSize.md,
+                  fontWeight: FontWeight.medium,
+                  flex: 1,
+                }}>
+                Session hart leeren (SecureStore-Wipe)
+              </ThemedText>
+              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>DEV</ThemedText>
+            </Pressable>
+          </>
+        ) : null}
 
         <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Info</ThemedText>
         <Pressable

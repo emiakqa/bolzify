@@ -161,6 +161,29 @@ type ScoredTipInsert = {
   scored_at?: string;
 };
 
+type SpecialTipRow = {
+  user_id: string;
+  tournament: string;
+  champion_team_id: number | null;
+  runner_up_team_id: number | null;
+  semifinalist_a_team_id: number | null;
+  semifinalist_b_team_id: number | null;
+  top_scorer_player_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+type SpecialTipInsert = {
+  user_id: string;
+  tournament?: string;
+  champion_team_id?: number | null;
+  runner_up_team_id?: number | null;
+  semifinalist_a_team_id?: number | null;
+  semifinalist_b_team_id?: number | null;
+  top_scorer_player_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -212,6 +235,12 @@ export type Database = {
         Update: Partial<ScoredTipInsert>;
         Relationships: [];
       };
+      special_tips: {
+        Row: SpecialTipRow;
+        Insert: SpecialTipInsert;
+        Update: Partial<SpecialTipInsert>;
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {
@@ -226,6 +255,10 @@ export type Database = {
       delete_own_account: {
         Args: Record<string, never>;
         Returns: void;
+      };
+      special_tips_deadline: {
+        Args: { p_tournament: string };
+        Returns: string | null;
       };
     };
     Enums: {};

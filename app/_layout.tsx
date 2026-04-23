@@ -8,7 +8,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, isPlaceholderUsername, useAuth } from '@/lib/auth';
 import { clearAllReminders, syncReminders } from '@/lib/notifications';
-import { hasSeenOnboarding } from '@/lib/onboarding';
+import { hasSeenOnboarding, subscribeOnboarding } from '@/lib/onboarding';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -21,12 +21,34 @@ function AuthGate() {
 
   // null = noch nicht geprüft, true/false = Ergebnis. Muss in den Routing-Check
   // einfließen, damit wir nicht vor dem Check schon nach / schicken.
+  // Subscribe auf Pub-Sub in lib/onboarding, damit das Flag nach „Los geht's"
+  // sofort hier ankommt — sonst Redirect-Loop zwischen / und /onboarding.
   const [onboardingSeen, setOnboardingSeen] = useState<boolean | null>(null);
   useEffect(() => {
+    console.log('[AuthGate] checking onboarding flag…');
     hasSeenOnboarding()
-      .then(setOnboardingSeen)
-      .catch(() => setOnboardingSeen(true)); // im Zweifel überspringen, nicht nerven
+      .then((v) => {
+        console.log('[AuthGate] onboardingSeen =', v);
+        setOnboardingSeen(v);
+      })
+      .catch((e) => {
+        console.warn('[AuthGate] hasSeenOnboarding failed', e);
+        setOnboardingSeen(true);
+      });
+    const unsub = subscribeOnboarding(setOnboardingSeen);
+    return unsub;
   }, []);
+
+  // Debug: loading / session / onboardingSeen loggen, damit wir sehen wo's hängt.
+  useEffect(() => {
+    console.log(
+      '[AuthGate] state:',
+      'loading=', loading,
+      'hasSession=', !!session,
+      'onboardingSeen=', onboardingSeen,
+      'segments=', segments.join('/'),
+    );
+  }, [loading, session, onboardingSeen, segments]);
 
   useEffect(() => {
     if (loading || onboardingSeen === null) return;
@@ -89,6 +111,7 @@ function AuthGate() {
       <Stack.Screen name="leagues/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="settings" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="special-tips" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="impressum" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
     </Stack>

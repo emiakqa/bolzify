@@ -128,7 +128,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     justifyContent: 'center',
   },
-  emoji: { fontSize: 88, textAlign: 'center', marginBottom: Spacing.xl },
+  // iOS croppt Emojis oben/unten, wenn lineHeight ≈ fontSize. 1.35× gibt dem
+  // Glyph genug Luft, außerdem Padding-vertikal als Sicherheitsnetz für Android.
+  emoji: {
+    fontSize: 88,
+    lineHeight: 120,
+    paddingVertical: 8,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
   title: {
     fontSize: FontSize.xxl,
     fontWeight: FontWeight.bold,

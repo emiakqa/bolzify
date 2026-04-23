@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
+import { deName } from '@/lib/country-names';
 import { formatKickoffDate, formatKickoffTime, isBeforeKickoff } from '@/lib/format';
 import { cancelReminder } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
@@ -83,12 +84,12 @@ export default function TipScreen() {
         const groups: PickerGroup[] = [
           {
             teamId: m.home_team_id,
-            teamName: m.home_team,
+            teamName: deName(m.home_team),
             players: (playerRows ?? []).filter((p) => p.team_id === m.home_team_id),
           },
           {
             teamId: m.away_team_id,
-            teamName: m.away_team,
+            teamName: deName(m.away_team),
             players: (playerRows ?? []).filter((p) => p.team_id === m.away_team_id),
           },
         ];
@@ -199,7 +200,7 @@ export default function TipScreen() {
 
           <View style={styles.scoreBlock}>
             <Stepper
-              label={match.home_team}
+              label={deName(match.home_team)}
               value={home}
               onChange={setHome}
               disabled={!tippable || saving}
@@ -207,7 +208,7 @@ export default function TipScreen() {
             />
             <ThemedText style={[styles.colon, { color: c.textFaint }]}>:</ThemedText>
             <Stepper
-              label={match.away_team}
+              label={deName(match.away_team)}
               value={away}
               onChange={setAway}
               disabled={!tippable || saving}

@@ -14,6 +14,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
+import { deName } from '@/lib/country-names';
 import { formatKickoffDate, formatKickoffTime } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
@@ -44,8 +45,11 @@ export default function MyTipsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Dep auf user.id (Primitive), nicht user (Objekt) — sonst reloaded
+  // bei jedem Supabase-Session-Refresh.
+  const userId = user?.id ?? null;
   const load = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setSections([]);
       setLoading(false);
       return;
@@ -55,7 +59,7 @@ export default function MyTipsScreen() {
     const { data: tipRows } = await supabase
       .from('tips')
       .select('match_id, home_goals, away_goals, first_scorer_id')
-      .eq('user_id', user.id);
+      .eq('user_id', userId);
 
     if (!tipRows || tipRows.length === 0) {
       setSections([]);
@@ -76,7 +80,7 @@ export default function MyTipsScreen() {
       supabase
         .from('scored_tips')
         .select('match_id, total_points')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .in('match_id', matchIds),
       scorerIds.length > 0
         ? supabase.from('players').select('id, name').in('id', scorerIds)
@@ -121,7 +125,7 @@ export default function MyTipsScreen() {
     if (finished.length > 0) next.push({ title: 'Gespielt', data: finished });
     setSections(next);
     setLoading(false);
-  }, [user]);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -241,11 +245,11 @@ export default function MyTipsScreen() {
 
             <View style={styles.rowTeams}>
               <ThemedText style={[styles.team, { color: c.text }]} numberOfLines={1}>
-                {item.home_team}
+                {deName(item.home_team)}
               </ThemedText>
               <ThemedText style={{ color: c.textFaint, fontSize: FontSize.sm }}>vs</ThemedText>
               <ThemedText style={[styles.team, { color: c.text }]} numberOfLines={1}>
-                {item.away_team}
+                {deName(item.away_team)}
               </ThemedText>
             </View>
 

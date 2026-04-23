@@ -16,6 +16,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
+import { deName } from '@/lib/country-names';
 import { formatCountdown, formatKickoffDate, formatKickoffTime } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
@@ -26,6 +27,8 @@ type Match = {
   away_team: string;
   stage: string | null;
   status: string;
+  home_goals: number | null;
+  away_goals: number | null;
 };
 
 type Tip = {
@@ -40,6 +43,12 @@ type LeaguePreview = {
   member_count: number;
 };
 
+// Wie weit hat der User seine Sondertipps schon ausgefüllt? Rein UI-Status.
+type SpecialTipsStatus = {
+  filled: number;
+  total: number; // 5 Slots: champion, runner_up, semifinal_a, semifinal_b, top_scorer
+};
+
 export default function HomeScreen() {
   const { user, profile } = useAuth();
   const router = useRouter();
@@ -49,39 +58,66 @@ export default function HomeScreen() {
   const [nextMatch, setNextMatch] = useState<Match | null>(null);
   const [nextMatchTip, setNextMatchTip] = useState<Tip | null>(null);
   const [myLeagues, setMyLeagues] = useState<LeaguePreview[]>([]);
+  const [specialStatus, setSpecialStatus] = useState<SpecialTipsStatus>({ filled: 0, total: 5 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
 
+  // WICHTIG: Dep auf user.id (Primitive, stabil), NICHT auf user (Objekt).
+  // Supabase gibt bei jedem onAuthStateChange / Token-Refresh ein neues
+  // session.user-Objekt zurück → sonst würde `load` ständig neu referenziert
+  // und unser useEffect(load) würde alle 10–20s die Daten reloaden.
+  const userId = user?.id ?? null;
   const load = useCallback(async () => {
-    const { data: matches } = await supabase
+    const t0 = Date.now();
+    console.log('[Home] load() start, userId=', userId);
+    const { data: matches, error: mErr } = await supabase
       .from('matches')
-      .select('id, kickoff_at, home_team, away_team, stage, status')
+      .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
       .eq('status', 'scheduled')
       .gt('kickoff_at', new Date().toISOString())
       .order('kickoff_at', { ascending: true })
       .limit(1);
+    console.log(
+      '[Home] matches query done after',
+      Date.now() - t0,
+      'ms, rows=',
+      matches?.length ?? 0,
+      'err=',
+      mErr?.message,
+    );
 
     const m = matches?.[0] ?? null;
 
-    // Fallback: wenn kein zukünftiges Spiel mehr existiert (z.B. WM-2022-Dev-Daten),
-    // nimm einfach das chronologisch erste Spiel zum Anzeigen.
+    // Fallback: wenn kein zukünftiges Spiel mehr existiert, zeig stattdessen
+    // das zuletzt beendete Match mit Endstand (z.B. während der WM zwischen
+    // zwei Spieltagen, oder komplett nach dem Turnier).
     let finalMatch = m;
+    if (!finalMatch) {
+      const { data: last } = await supabase
+        .from('matches')
+        .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+        .eq('status', 'finished')
+        .order('kickoff_at', { ascending: false })
+        .limit(1);
+      finalMatch = last?.[0] ?? null;
+    }
+    // Letzter Fallback (Dev-DB ohne finished Matches): erstes Match überhaupt.
     if (!finalMatch) {
       const { data: first } = await supabase
         .from('matches')
-        .select('id, kickoff_at, home_team, away_team, stage, status')
+        .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
         .order('kickoff_at', { ascending: true })
         .limit(1);
       finalMatch = first?.[0] ?? null;
     }
     setNextMatch(finalMatch);
 
-    if (finalMatch && user) {
+    if (finalMatch && userId) {
       const { data: tip } = await supabase
         .from('tips')
         .select('match_id, home_goals, away_goals')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('match_id', finalMatch.id)
         .maybeSingle();
       setNextMatchTip(tip ?? null);
@@ -89,12 +125,36 @@ export default function HomeScreen() {
       setNextMatchTip(null);
     }
 
+    // Sondertipps-Status (für Home-Card).
+    if (userId) {
+      const { data: special } = await supabase
+        .from('special_tips')
+        .select(
+          'champion_team_id, runner_up_team_id, semifinalist_a_team_id, semifinalist_b_team_id, top_scorer_player_id',
+        )
+        .eq('user_id', userId)
+        .eq('tournament', 'WM2026')
+        .maybeSingle();
+      if (special) {
+        const filled = [
+          special.champion_team_id,
+          special.runner_up_team_id,
+          special.semifinalist_a_team_id,
+          special.semifinalist_b_team_id,
+          special.top_scorer_player_id,
+        ].filter((v) => v != null).length;
+        setSpecialStatus({ filled, total: 5 });
+      } else {
+        setSpecialStatus({ filled: 0, total: 5 });
+      }
+    }
+
     // Meine Ligen (Preview — max 3 auf Home)
-    if (user) {
+    if (userId) {
       const { data: memberRows } = await supabase
         .from('league_members')
         .select('league_id')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
       const ids = (memberRows ?? []).map((r) => r.league_id);
       if (ids.length > 0) {
         const { data: lgs } = await supabase
@@ -116,7 +176,7 @@ export default function HomeScreen() {
     }
 
     setLoading(false);
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
     load();
@@ -165,7 +225,9 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Nächstes Match</ThemedText>
+        <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>
+          {nextMatch?.status === 'finished' ? 'Letztes Ergebnis' : 'Nächstes Match'}
+        </ThemedText>
 
         {loading ? (
           <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
@@ -186,6 +248,39 @@ export default function HomeScreen() {
             onPress={() => router.push({ pathname: '/tip/[matchId]', params: { matchId: String(nextMatch.id) } })}
           />
         )}
+
+        <ThemedText style={[styles.sectionLabel, { color: c.textFaint, marginTop: Spacing.xl }]}>
+          Sondertipps
+        </ThemedText>
+        <Pressable
+          onPress={() => router.push('/special-tips')}
+          style={({ pressed }) => [
+            styles.specialRow,
+            {
+              backgroundColor: c.surface,
+              borderColor: specialStatus.filled > 0 ? c.accent : c.border,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}>
+          <View style={{ flex: 1 }}>
+            <ThemedText
+              style={{
+                color: c.text,
+                fontSize: FontSize.md,
+                fontWeight: FontWeight.semibold,
+              }}>
+              Weltmeister, Finalist, Torschützenkönig …
+            </ThemedText>
+            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs, marginTop: 2 }}>
+              {specialStatus.filled === 0
+                ? 'Noch nicht getippt'
+                : specialStatus.filled === specialStatus.total
+                ? 'Alle Sondertipps abgegeben'
+                : `${specialStatus.filled} von ${specialStatus.total} Feldern ausgefüllt`}
+            </ThemedText>
+          </View>
+          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>›</ThemedText>
+        </Pressable>
 
         <View style={styles.ligaHeader}>
           <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Deine Ligen</ThemedText>
@@ -278,6 +373,20 @@ function MatchCard({
   onPress: () => void;
 }) {
   const countdown = formatCountdown(match.kickoff_at, now);
+  const isFinished =
+    match.status === 'finished' && match.home_goals !== null && match.away_goals !== null;
+
+  // Treffer-Bewertung für die CTA-Zeile im beendeten Fall.
+  let tipOutcome: 'exact' | 'diff' | 'trend' | 'miss' | null = null;
+  if (isFinished && tip) {
+    const hg = match.home_goals!;
+    const ag = match.away_goals!;
+    if (tip.home_goals === hg && tip.away_goals === ag) tipOutcome = 'exact';
+    else if (tip.home_goals - tip.away_goals === hg - ag) tipOutcome = 'diff';
+    else if (Math.sign(tip.home_goals - tip.away_goals) === Math.sign(hg - ag)) tipOutcome = 'trend';
+    else tipOutcome = 'miss';
+  }
+
   return (
     <Pressable
       onPress={onPress}
@@ -289,38 +398,89 @@ function MatchCard({
         <ThemedText style={{ color: c.nostalgia, fontSize: FontSize.xs, fontWeight: FontWeight.semibold }}>
           {match.stage ?? 'TBD'}
         </ThemedText>
-        <ThemedText style={{ color: c.accent, fontSize: FontSize.sm, fontWeight: FontWeight.semibold }}>
-          {countdown}
+        <ThemedText
+          style={{
+            color: isFinished ? c.textMuted : c.accent,
+            fontSize: FontSize.sm,
+            fontWeight: FontWeight.semibold,
+          }}>
+          {isFinished ? 'Beendet' : countdown}
         </ThemedText>
       </View>
 
       <View style={styles.teams}>
-        <ThemedText style={[styles.team, { color: c.text }]}>{match.home_team}</ThemedText>
-        <ThemedText style={[styles.vs, { color: c.textFaint }]}>vs</ThemedText>
-        <ThemedText style={[styles.team, { color: c.text }]}>{match.away_team}</ThemedText>
+        <ThemedText style={[styles.team, { color: c.text }]}>{deName(match.home_team)}</ThemedText>
+        {isFinished ? (
+          <ThemedText style={[styles.score, { color: c.text }]}>
+            {match.home_goals} : {match.away_goals}
+          </ThemedText>
+        ) : (
+          <ThemedText style={[styles.vs, { color: c.textFaint }]}>vs</ThemedText>
+        )}
+        <ThemedText style={[styles.team, { color: c.text }]}>{deName(match.away_team)}</ThemedText>
       </View>
 
       <ThemedText style={{ color: c.textMuted, fontSize: FontSize.sm, textAlign: 'center' }}>
         {formatKickoffDate(match.kickoff_at)} · {formatKickoffTime(match.kickoff_at)}
       </ThemedText>
 
-      <View
-        style={[
-          styles.cta,
-          {
-            backgroundColor: tip ? c.surfaceElevated : c.accent,
-            borderColor: tip ? c.border : c.accent,
-          },
-        ]}>
-        <ThemedText
-          style={{
-            color: tip ? c.text : c.accentFg,
-            fontWeight: FontWeight.semibold,
-            fontSize: FontSize.md,
-          }}>
-          {tip ? `Dein Tipp: ${tip.home_goals} : ${tip.away_goals}` : 'Jetzt tippen'}
-        </ThemedText>
-      </View>
+      {isFinished ? (
+        tip ? (
+          <View
+            style={[
+              styles.cta,
+              {
+                backgroundColor: c.surfaceElevated,
+                borderColor: tipOutcome === 'miss' ? c.border : c.accent,
+              },
+            ]}>
+            <ThemedText
+              style={{
+                color: tipOutcome === 'miss' ? c.textMuted : c.accent,
+                fontWeight: FontWeight.semibold,
+                fontSize: FontSize.md,
+              }}>
+              Dein Tipp: {tip.home_goals} : {tip.away_goals}
+              {tipOutcome === 'exact'
+                ? '  ✓ exakt'
+                : tipOutcome === 'diff'
+                ? '  ✓ Differenz'
+                : tipOutcome === 'trend'
+                ? '  ✓ Tendenz'
+                : ''}
+            </ThemedText>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.cta,
+              { backgroundColor: c.surfaceElevated, borderColor: c.border },
+            ]}>
+            <ThemedText
+              style={{ color: c.textMuted, fontWeight: FontWeight.semibold, fontSize: FontSize.md }}>
+              Kein Tipp abgegeben
+            </ThemedText>
+          </View>
+        )
+      ) : (
+        <View
+          style={[
+            styles.cta,
+            {
+              backgroundColor: tip ? c.surfaceElevated : c.accent,
+              borderColor: tip ? c.border : c.accent,
+            },
+          ]}>
+          <ThemedText
+            style={{
+              color: tip ? c.text : c.accentFg,
+              fontWeight: FontWeight.semibold,
+              fontSize: FontSize.md,
+            }}>
+            {tip ? `Dein Tipp: ${tip.home_goals} : ${tip.away_goals}` : 'Jetzt tippen'}
+          </ThemedText>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -377,6 +537,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: Spacing.xl,
   },
+  specialRow: {
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
   ligaRow: {
     borderRadius: Radius.md,
     borderWidth: 1,
@@ -410,6 +578,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   vs: { fontSize: FontSize.sm, textTransform: 'uppercase' },
+  score: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, minWidth: 64, textAlign: 'center' },
   cta: {
     marginTop: Spacing.sm,
     borderWidth: 1,

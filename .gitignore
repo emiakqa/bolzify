@@ -42,3 +42,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# EAS / Store-Submission Secrets
+/secrets/
+*-service-account.json
+*.keystore

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "bolzify",
+    "name": "Bolzify",
     "slug": "bolzify",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,10 +8,32 @@
     "scheme": "bolzify",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "primaryColor": "#22c55e",
+    "owner": "[EXPO_USERNAME]",
+    "extra": {
+      "eas": {
+        "projectId": "[EAS_PROJECT_ID]"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/[EAS_PROJECT_ID]"
+    },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "de.bolzify.app",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Bolzify braucht Zugriff auf deine Fotos, damit du ein Profilbild auswählen kannst.",
+        "NSCameraUsageDescription": "Bolzify nutzt die Kamera nicht — diese Beschreibung wird nur bei Bedarf angezeigt.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "de.bolzify.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +41,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
     },
     "web": {
       "output": "static",
@@ -39,7 +65,22 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Bolzify braucht Zugriff auf deine Fotos, damit du ein Profilbild auswählen kannst.",
+          "cameraPermission": "Bolzify nutzt die Kamera aktuell nicht."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#22c55e",
+          "defaultChannel": "tip-reminders"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -2,8 +2,14 @@ import * as Application from 'expo-application';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+// TODO(2026-05): Sobald GitHub Pages public live ist, sind diese URLs
+// erreichbar. Bis dahin liefern sie 404 — App-Store-Submission braucht
+// das aber sowieso erst zum Beta-Test-Start.
+const PRIVACY_URL = 'https://emiakqa.github.io/bolzify/privacy.html';
+const SUPPORT_URL = 'https://emiakqa.github.io/bolzify/support.html';
 
 import { ThemedText } from '@/components/themed-text';
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
@@ -253,6 +259,48 @@ export default function SettingsScreen() {
         ) : null}
 
         <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Info</ThemedText>
+        <Pressable
+          onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
+          style={({ pressed }) => [
+            styles.row,
+            {
+              backgroundColor: c.surface,
+              borderColor: c.border,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}>
+          <ThemedText
+            style={{
+              color: c.text,
+              fontSize: FontSize.md,
+              fontWeight: FontWeight.medium,
+              flex: 1,
+            }}>
+            Datenschutz
+          </ThemedText>
+          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>↗</ThemedText>
+        </Pressable>
+        <Pressable
+          onPress={() => Linking.openURL(SUPPORT_URL).catch(() => {})}
+          style={({ pressed }) => [
+            styles.row,
+            {
+              backgroundColor: c.surface,
+              borderColor: c.border,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}>
+          <ThemedText
+            style={{
+              color: c.text,
+              fontSize: FontSize.md,
+              fontWeight: FontWeight.medium,
+              flex: 1,
+            }}>
+            Support & FAQ
+          </ThemedText>
+          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>↗</ThemedText>
+        </Pressable>
         <Pressable
           onPress={() => router.push('/impressum')}
           style={({ pressed }) => [

@@ -6,9 +6,6 @@ import { ThemedText } from '@/components/themed-text';
 import { Colors, FontSize, FontWeight, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// Platzhalter. Vor Launch mit echten Daten füllen (Name, Anschrift, Kontakt,
-// USt-IdNr. falls vorhanden, verantwortlich nach § 18 Abs. 2 MStV).
-
 export default function ImpressumScreen() {
   const router = useRouter();
   const scheme = useColorScheme() ?? 'dark';
@@ -29,9 +26,9 @@ export default function ImpressumScreen() {
             Angaben gemäß § 5 TMG
           </ThemedText>
           <ThemedText style={[styles.body, { color: c.textMuted }]}>
-            [Vor- und Nachname]{'\n'}
-            [Straße Hausnummer]{'\n'}
-            [PLZ Ort]{'\n'}
+            Emirhan Akkaya{'\n'}
+            Fabriciusstraße 13{'\n'}
+            22177 Hamburg{'\n'}
             Deutschland
           </ThemedText>
         </View>
@@ -39,7 +36,7 @@ export default function ImpressumScreen() {
         <View style={styles.section}>
           <ThemedText style={[styles.heading, { color: c.text }]}>Kontakt</ThemedText>
           <ThemedText style={[styles.body, { color: c.textMuted }]}>
-            E-Mail: kontakt@bolzify.app
+            E-Mail: emi.ak@live.de
           </ThemedText>
         </View>
 
@@ -48,7 +45,7 @@ export default function ImpressumScreen() {
             Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV
           </ThemedText>
           <ThemedText style={[styles.body, { color: c.textMuted }]}>
-            [Vor- und Nachname]{'\n'}[Anschrift wie oben]
+            Emirhan Akkaya{'\n'}Anschrift wie oben
           </ThemedText>
         </View>
 
@@ -62,8 +59,7 @@ export default function ImpressumScreen() {
         </View>
 
         <ThemedText style={[styles.footer, { color: c.textFaint }]}>
-          Stand: {new Date().toLocaleDateString('de-DE')} · Noch Platzhalter-Daten, vor Launch
-          ersetzen.
+          Stand: {new Date().toLocaleDateString('de-DE')}
         </ThemedText>
       </ScrollView>
     </SafeAreaView>

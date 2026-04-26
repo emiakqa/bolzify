@@ -12,8 +12,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { SectionHeader } from '@/components/ui/section-header';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  Radius,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
@@ -44,10 +56,9 @@ type LeaguePreview = {
   member_count: number;
 };
 
-// Wie weit hat der User seine Sondertipps schon ausgefüllt? Rein UI-Status.
 type SpecialTipsStatus = {
   filled: number;
-  total: number; // 5 Slots: champion, runner_up, semifinal_a, semifinal_b, top_scorer
+  total: number;
 };
 
 export default function HomeScreen() {
@@ -60,18 +71,11 @@ export default function HomeScreen() {
   const [nextMatchTip, setNextMatchTip] = useState<Tip | null>(null);
   const [myLeagues, setMyLeagues] = useState<LeaguePreview[]>([]);
   const [specialStatus, setSpecialStatus] = useState<SpecialTipsStatus>({ filled: 0, total: 5 });
-  // Aktuelle Sondertipp-Punkte (kommt erst nach Halbfinale/Final via Trigger).
-  // null = scored_special_tips Row existiert noch nicht (Turnier nicht
-  // entscheidungsrelevant fortgeschritten). 0+ = Engine hat bereits gescored.
   const [specialPoints, setSpecialPoints] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
 
-  // WICHTIG: Dep auf user.id (Primitive, stabil), NICHT auf user (Objekt).
-  // Supabase gibt bei jedem onAuthStateChange / Token-Refresh ein neues
-  // session.user-Objekt zurück → sonst würde `load` ständig neu referenziert
-  // und unser useEffect(load) würde alle 10–20s die Daten reloaden.
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
     const t0 = Date.now();
@@ -93,10 +97,6 @@ export default function HomeScreen() {
     );
 
     const m = matches?.[0] ?? null;
-
-    // Fallback: wenn kein zukünftiges Spiel mehr existiert, zeig stattdessen
-    // das zuletzt beendete Match mit Endstand (z.B. während der WM zwischen
-    // zwei Spieltagen, oder komplett nach dem Turnier).
     let finalMatch = m;
     if (!finalMatch) {
       const { data: last } = await supabase
@@ -107,7 +107,6 @@ export default function HomeScreen() {
         .limit(1);
       finalMatch = last?.[0] ?? null;
     }
-    // Letzter Fallback (Dev-DB ohne finished Matches): erstes Match überhaupt.
     if (!finalMatch) {
       const { data: first } = await supabase
         .from('matches')
@@ -130,9 +129,6 @@ export default function HomeScreen() {
       setNextMatchTip(null);
     }
 
-    // Sondertipps-Status (für Home-Card). Turnier dynamisch resolven — so
-    // funktioniert die Anzeige gegen WM2022-Dev-Daten und springt automatisch
-    // auf WM2026 um, sobald die Fixtures importiert sind.
     if (userId) {
       const tournament = await getCurrentTournament();
       const { data: special } = await supabase
@@ -156,8 +152,6 @@ export default function HomeScreen() {
         setSpecialStatus({ filled: 0, total: 5 });
       }
 
-      // Aktuelle Sondertipp-Punkte. Wird via DB-Trigger gesetzt sobald HF/Final
-      // gespielt sind. Vorher: keine Row → null → wir zeigen den Filled-Status.
       const { data: scoredSpecial } = await supabase
         .from('scored_special_tips')
         .select('total_points')
@@ -167,7 +161,6 @@ export default function HomeScreen() {
       setSpecialPoints(scoredSpecial?.total_points ?? null);
     }
 
-    // Meine Ligen (Preview — max 3 auf Home)
     if (userId) {
       const { data: memberRows } = await supabase
         .from('league_members')
@@ -186,8 +179,11 @@ export default function HomeScreen() {
           .select('league_id')
           .in('league_id', ids);
         const countMap = new Map<string, number>();
-        for (const row of counts ?? []) countMap.set(row.league_id, (countMap.get(row.league_id) ?? 0) + 1);
-        setMyLeagues((lgs ?? []).map((l) => ({ ...l, member_count: countMap.get(l.id) ?? 1 })));
+        for (const row of counts ?? [])
+          countMap.set(row.league_id, (countMap.get(row.league_id) ?? 0) + 1);
+        setMyLeagues(
+          (lgs ?? []).map((l) => ({ ...l, member_count: countMap.get(l.id) ?? 1 })),
+        );
       } else {
         setMyLeagues([]);
       }
@@ -200,7 +196,6 @@ export default function HomeScreen() {
     load();
   }, [load]);
 
-  // Countdown einmal pro Minute aktualisieren.
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
@@ -216,11 +211,35 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={c.textMuted}
+          />
+        }>
+        {/* Header */}
         <View style={styles.header}>
-          <View>
-            <ThemedText style={[styles.hi, { color: c.textMuted }]}>Moin</ThemedText>
-            <ThemedText style={[styles.username, { color: c.text }]}>
+          <View style={{ flex: 1 }}>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.sm,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.medium,
+              }}>
+              Moin
+            </ThemedText>
+            <ThemedText
+              style={{
+                color: c.text,
+                fontSize: FontSize.display,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.heavy,
+                letterSpacing: LetterSpacing.display,
+                marginTop: 2,
+              }}>
               @{profile?.username ?? '—'}
             </ThemedText>
           </View>
@@ -228,13 +247,18 @@ export default function HomeScreen() {
             onPress={() => router.push('/settings')}
             hitSlop={12}
             style={({ pressed }) => [
-              styles.settingsBtn,
-              { borderColor: c.border, backgroundColor: c.surface, opacity: pressed ? 0.7 : 1 },
+              styles.avatarBtn,
+              {
+                borderColor: c.borderStrong,
+                backgroundColor: c.surface,
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.94 : 1 }],
+              },
             ]}>
             {profile?.avatar_url ? (
               <Image
                 source={{ uri: profile.avatar_url }}
-                style={styles.settingsAvatar}
+                style={styles.avatarImg}
                 contentFit="cover"
               />
             ) : (
@@ -243,153 +267,169 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>
-          {nextMatch?.status === 'finished' ? 'Letztes Ergebnis' : 'Nächstes Match'}
-        </ThemedText>
+        {/* Hero: Next Match */}
+        <SectionHeader
+          title={nextMatch?.status === 'finished' ? 'Letztes Ergebnis' : 'Nächstes Match'}
+          marginTop={Spacing.lg}
+        />
 
         {loading ? (
-          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Card>
             <ActivityIndicator color={c.textMuted} />
-          </View>
+          </Card>
         ) : !nextMatch ? (
-          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Card>
             <ThemedText style={{ color: c.textMuted }}>
               Noch keine Matches in der DB.
             </ThemedText>
-          </View>
+          </Card>
         ) : (
-          <MatchCard
+          <MatchHero
             match={nextMatch}
             tip={nextMatchTip}
             now={now}
             c={c}
-            onPress={() => router.push({ pathname: '/tip/[matchId]', params: { matchId: String(nextMatch.id) } })}
+            onPress={() =>
+              router.push({
+                pathname: '/tip/[matchId]',
+                params: { matchId: String(nextMatch.id) },
+              })
+            }
           />
         )}
 
-        <ThemedText style={[styles.sectionLabel, { color: c.textFaint, marginTop: Spacing.xl }]}>
-          Sondertipps
-        </ThemedText>
-        <Pressable
-          onPress={() => router.push('/special-tips')}
-          style={({ pressed }) => [
-            styles.specialRow,
-            {
-              backgroundColor: c.surface,
-              borderColor: specialStatus.filled > 0 ? c.accent : c.border,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <View style={{ flex: 1 }}>
-            <ThemedText
-              style={{
-                color: c.text,
-                fontSize: FontSize.md,
-                fontWeight: FontWeight.semibold,
-              }}>
-              Weltmeister, Finalist, Torschützenkönig …
-            </ThemedText>
-            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs, marginTop: 2 }}>
-              {specialStatus.filled === 0
-                ? 'Noch nicht getippt'
-                : specialStatus.filled === specialStatus.total
-                ? 'Alle Sondertipps abgegeben'
-                : `${specialStatus.filled} von ${specialStatus.total} Feldern ausgefüllt`}
-            </ThemedText>
-          </View>
-          {specialPoints !== null && specialPoints > 0 ? (
-            <View style={[styles.specialPointsBadge, { borderColor: c.accent }]}>
+        {/* Sondertipps */}
+        <SectionHeader title="Sondertipps" />
+        <Card
+          variant={specialStatus.filled > 0 ? 'accent' : 'default'}
+          onPress={() => router.push('/special-tips')}>
+          <View style={styles.specialInner}>
+            <View style={{ flex: 1 }}>
               <ThemedText
                 style={{
-                  color: c.accent,
-                  fontSize: FontSize.xs,
-                  fontWeight: FontWeight.bold,
+                  color: c.text,
+                  fontSize: FontSize.md,
+                  fontFamily: Fonts?.rounded,
+                  fontWeight: FontWeight.semibold,
                 }}>
-                {specialPoints} Pkt
+                Weltmeister · Finalist · Torschützenkönig
+              </ThemedText>
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.sm,
+                  marginTop: 4,
+                }}>
+                {specialStatus.filled === 0
+                  ? 'Noch nicht getippt — vor Turnierstart abgeben'
+                  : specialStatus.filled === specialStatus.total
+                    ? '✓ Alle Sondertipps abgegeben'
+                    : `${specialStatus.filled} von ${specialStatus.total} Feldern ausgefüllt`}
               </ThemedText>
             </View>
-          ) : null}
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>›</ThemedText>
-        </Pressable>
-
-        <View style={styles.ligaHeader}>
-          <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Deine Ligen</ThemedText>
-          <Pressable onPress={() => router.push('/(tabs)/leagues')} hitSlop={8}>
-            <ThemedText style={{ color: c.accent, fontSize: FontSize.xs, fontWeight: FontWeight.semibold }}>
-              Alle ›
+            {specialPoints !== null && specialPoints > 0 ? (
+              <Badge label={`${specialPoints} Pkt`} tone="accent" />
+            ) : null}
+            <ThemedText
+              style={{
+                color: c.textFaint,
+                fontSize: FontSize.xl,
+                fontWeight: FontWeight.regular,
+              }}>
+              ›
             </ThemedText>
-          </Pressable>
-        </View>
+          </View>
+        </Card>
+
+        {/* Ligen */}
+        <SectionHeader
+          title="Deine Ligen"
+          action={{ label: 'Alle', onPress: () => router.push('/(tabs)/leagues') }}
+        />
 
         {myLeagues.length === 0 ? (
-          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
+          <Card padding="lg">
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                textAlign: 'center',
+                fontSize: FontSize.md,
+                lineHeight: 22,
+              }}>
               Noch keine Liga.{'\n'}Leg eine an oder tritt per Code bei.
             </ThemedText>
             <View style={styles.ctaRow}>
-              <Pressable
+              <Button
+                label="Liga erstellen"
+                size="md"
+                fullWidth
                 onPress={() => router.push('/leagues-new')}
-                style={({ pressed }) => [
-                  styles.ctaPrimary,
-                  { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
-                ]}>
-                <ThemedText
-                  style={{
-                    color: c.accentFg,
-                    fontWeight: FontWeight.semibold,
-                    fontSize: FontSize.sm,
-                  }}>
-                  Liga erstellen
-                </ThemedText>
-              </Pressable>
-              <Pressable
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Beitreten"
+                variant="secondary"
+                size="md"
+                fullWidth
                 onPress={() => router.push('/leagues-join')}
-                style={({ pressed }) => [
-                  styles.ctaSecondary,
-                  { borderColor: c.border, opacity: pressed ? 0.85 : 1 },
-                ]}>
-                <ThemedText
-                  style={{
-                    color: c.text,
-                    fontWeight: FontWeight.semibold,
-                    fontSize: FontSize.sm,
-                  }}>
-                  Beitreten
-                </ThemedText>
-              </Pressable>
+                style={{ flex: 1 }}
+              />
             </View>
-          </View>
+          </Card>
         ) : (
-          myLeagues.map((l) => (
-            <Pressable
-              key={l.id}
-              onPress={() => router.push({ pathname: '/leagues/[id]', params: { id: l.id } })}
-              style={({ pressed }) => [
-                styles.ligaRow,
-                { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.85 : 1 },
-              ]}>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={{ color: c.text, fontSize: FontSize.md, fontWeight: FontWeight.semibold }}>
-                  {l.name}
-                </ThemedText>
-                <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs, marginTop: 2 }}>
-                  {l.member_count} {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'}
-                </ThemedText>
-              </View>
-              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.md }}>›</ThemedText>
-            </Pressable>
-          ))
+          <View style={{ gap: Spacing.sm }}>
+            {myLeagues.map((l) => (
+              <Card
+                key={l.id}
+                onPress={() => router.push({ pathname: '/leagues/[id]', params: { id: l.id } })}
+                padding="md">
+                <View style={styles.ligaInner}>
+                  <View
+                    style={[
+                      styles.ligaIcon,
+                      { backgroundColor: c.accentSoft },
+                    ]}>
+                    <IconSymbol name="person.3.fill" size={18} color={c.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText
+                      style={{
+                        color: c.text,
+                        fontSize: FontSize.md,
+                        fontFamily: Fonts?.rounded,
+                        fontWeight: FontWeight.semibold,
+                      }}>
+                      {l.name}
+                    </ThemedText>
+                    <ThemedText
+                      style={{
+                        color: c.textMuted,
+                        fontSize: FontSize.sm,
+                        marginTop: 2,
+                      }}>
+                      {l.member_count} {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'}
+                    </ThemedText>
+                  </View>
+                  <ThemedText
+                    style={{
+                      color: c.textFaint,
+                      fontSize: FontSize.xl,
+                    }}>
+                    ›
+                  </ThemedText>
+                </View>
+              </Card>
+            ))}
+          </View>
         )}
 
-        <ThemedText style={[styles.footer, { color: c.textFaint }]}>
-          {user?.email}
-        </ThemedText>
+        <ThemedText style={[styles.footer, { color: c.textFaint }]}>{user?.email}</ThemedText>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function MatchCard({
+function MatchHero({
   match,
   tip,
   now,
@@ -406,220 +446,235 @@ function MatchCard({
   const isFinished =
     match.status === 'finished' && match.home_goals !== null && match.away_goals !== null;
 
-  // Treffer-Bewertung für die CTA-Zeile im beendeten Fall.
   let tipOutcome: 'exact' | 'diff' | 'trend' | 'miss' | null = null;
   if (isFinished && tip) {
     const hg = match.home_goals!;
     const ag = match.away_goals!;
     if (tip.home_goals === hg && tip.away_goals === ag) tipOutcome = 'exact';
     else if (tip.home_goals - tip.away_goals === hg - ag) tipOutcome = 'diff';
-    else if (Math.sign(tip.home_goals - tip.away_goals) === Math.sign(hg - ag)) tipOutcome = 'trend';
+    else if (Math.sign(tip.home_goals - tip.away_goals) === Math.sign(hg - ag))
+      tipOutcome = 'trend';
     else tipOutcome = 'miss';
   }
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.85 : 1 },
-      ]}>
-      <View style={styles.cardTop}>
-        <ThemedText style={{ color: c.nostalgia, fontSize: FontSize.xs, fontWeight: FontWeight.semibold }}>
-          {match.stage ?? 'TBD'}
-        </ThemedText>
-        <ThemedText
-          style={{
-            color: isFinished ? c.textMuted : c.accent,
-            fontSize: FontSize.sm,
-            fontWeight: FontWeight.semibold,
-          }}>
-          {isFinished ? 'Beendet' : countdown}
-        </ThemedText>
+    <Card variant="elevated" onPress={onPress} padding="lg">
+      <View style={styles.heroTop}>
+        <Badge label={match.stage ?? 'TBD'} tone="neutral" />
+        {isFinished ? (
+          <Badge label="Beendet" tone="neutral" />
+        ) : (
+          <Badge label={countdown} tone="accent" />
+        )}
       </View>
 
-      <View style={styles.teams}>
-        <ThemedText style={[styles.team, { color: c.text }]}>{deName(match.home_team)}</ThemedText>
+      <View style={styles.heroTeams}>
+        <View style={styles.teamWrap}>
+          <ThemedText
+            style={{
+              color: c.text,
+              fontSize: FontSize.lg,
+              fontFamily: Fonts?.rounded,
+              fontWeight: FontWeight.bold,
+              textAlign: 'center',
+            }}>
+            {deName(match.home_team)}
+          </ThemedText>
+        </View>
         {isFinished ? (
-          <ThemedText style={[styles.score, { color: c.text }]}>
-            {match.home_goals} : {match.away_goals}
+          <ThemedText
+            style={{
+              color: c.text,
+              fontSize: FontSize.jumbo,
+              fontFamily: Fonts?.rounded,
+              fontWeight: FontWeight.heavy,
+              letterSpacing: LetterSpacing.display,
+              minWidth: 100,
+              textAlign: 'center',
+            }}>
+            {match.home_goals}:{match.away_goals}
           </ThemedText>
         ) : (
-          <ThemedText style={[styles.vs, { color: c.textFaint }]}>vs</ThemedText>
+          <View style={[styles.vsCircle, { backgroundColor: c.accentSoft }]}>
+            <ThemedText
+              style={{
+                color: c.accent,
+                fontSize: FontSize.sm,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              }}>
+              VS
+            </ThemedText>
+          </View>
         )}
-        <ThemedText style={[styles.team, { color: c.text }]}>{deName(match.away_team)}</ThemedText>
+        <View style={styles.teamWrap}>
+          <ThemedText
+            style={{
+              color: c.text,
+              fontSize: FontSize.lg,
+              fontFamily: Fonts?.rounded,
+              fontWeight: FontWeight.bold,
+              textAlign: 'center',
+            }}>
+            {deName(match.away_team)}
+          </ThemedText>
+        </View>
       </View>
 
-      <ThemedText style={{ color: c.textMuted, fontSize: FontSize.sm, textAlign: 'center' }}>
+      <ThemedText
+        style={{
+          color: c.textMuted,
+          fontSize: FontSize.sm,
+          textAlign: 'center',
+        }}>
         {formatKickoffDate(match.kickoff_at)} · {formatKickoffTime(match.kickoff_at)}
       </ThemedText>
 
-      {isFinished ? (
-        tip ? (
-          <View
-            style={[
-              styles.cta,
-              {
-                backgroundColor: c.surfaceElevated,
-                borderColor: tipOutcome === 'miss' ? c.border : c.accent,
-              },
-            ]}>
-            <ThemedText
-              style={{
-                color: tipOutcome === 'miss' ? c.textMuted : c.accent,
-                fontWeight: FontWeight.semibold,
-                fontSize: FontSize.md,
-              }}>
-              Dein Tipp: {tip.home_goals} : {tip.away_goals}
-              {tipOutcome === 'exact'
-                ? '  ✓ exakt'
-                : tipOutcome === 'diff'
-                ? '  ✓ Differenz'
-                : tipOutcome === 'trend'
-                ? '  ✓ Tendenz'
-                : ''}
-            </ThemedText>
-          </View>
+      {/* CTA-Pill am unteren Card-Rand */}
+      <View style={styles.heroCta}>
+        {isFinished ? (
+          tip ? (
+            <View
+              style={[
+                styles.ctaPill,
+                {
+                  backgroundColor:
+                    tipOutcome === 'miss' ? c.surfaceElevated : c.accentSoft,
+                  borderColor: tipOutcome === 'miss' ? c.border : c.accentBorder,
+                },
+              ]}>
+              <ThemedText
+                style={{
+                  color: tipOutcome === 'miss' ? c.textMuted : c.accent,
+                  fontFamily: Fonts?.rounded,
+                  fontWeight: FontWeight.semibold,
+                  fontSize: FontSize.md,
+                }}>
+                Dein Tipp: {tip.home_goals}:{tip.away_goals}
+                {tipOutcome === 'exact'
+                  ? '  ✓ exakt'
+                  : tipOutcome === 'diff'
+                    ? '  ✓ Differenz'
+                    : tipOutcome === 'trend'
+                      ? '  ✓ Tendenz'
+                      : ''}
+              </ThemedText>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.ctaPill,
+                { backgroundColor: c.surfaceElevated, borderColor: c.border },
+              ]}>
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontFamily: Fonts?.rounded,
+                  fontWeight: FontWeight.semibold,
+                  fontSize: FontSize.md,
+                }}>
+                Kein Tipp abgegeben
+              </ThemedText>
+            </View>
+          )
         ) : (
           <View
             style={[
-              styles.cta,
-              { backgroundColor: c.surfaceElevated, borderColor: c.border },
+              styles.ctaPill,
+              tip
+                ? { backgroundColor: c.surfaceElevated, borderColor: c.border }
+                : { backgroundColor: c.accent, borderColor: c.accent },
             ]}>
             <ThemedText
-              style={{ color: c.textMuted, fontWeight: FontWeight.semibold, fontSize: FontSize.md }}>
-              Kein Tipp abgegeben
+              style={{
+                color: tip ? c.text : c.accentFg,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.bold,
+                fontSize: FontSize.md,
+              }}>
+              {tip ? `Dein Tipp: ${tip.home_goals}:${tip.away_goals}` : 'Jetzt tippen →'}
             </ThemedText>
           </View>
-        )
-      ) : (
-        <View
-          style={[
-            styles.cta,
-            {
-              backgroundColor: tip ? c.surfaceElevated : c.accent,
-              borderColor: tip ? c.border : c.accent,
-            },
-          ]}>
-          <ThemedText
-            style={{
-              color: tip ? c.text : c.accentFg,
-              fontWeight: FontWeight.semibold,
-              fontSize: FontSize.md,
-            }}>
-            {tip ? `Dein Tipp: ${tip.home_goals} : ${tip.away_goals}` : 'Jetzt tippen'}
-          </ThemedText>
-        </View>
-      )}
-    </Pressable>
+        )}
+      </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
   },
-  hi: { fontSize: FontSize.sm },
-  username: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, marginTop: 2 },
-  settingsBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  avatarBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  settingsAvatar: { width: '100%', height: '100%' },
+  avatarImg: { width: '100%', height: '100%' },
   ctaRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
     marginTop: Spacing.md,
   },
-  ctaPrimary: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  ctaSecondary: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  sectionLabel: {
-    fontSize: FontSize.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: Spacing.sm,
-    fontWeight: FontWeight.semibold,
-  },
-  ligaHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.xl,
-  },
-  specialRow: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    padding: Spacing.md,
+  specialInner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
   },
-  specialPointsBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-  },
-  ligaRow: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    padding: Spacing.md,
+  ligaInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  card: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.lg,
     gap: Spacing.md,
   },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  ligaIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  teams: {
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  heroTeams: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginVertical: Spacing.sm,
+    marginVertical: Spacing.md,
     gap: Spacing.sm,
   },
-  team: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.semibold,
+  teamWrap: {
     flex: 1,
-    textAlign: 'center',
   },
-  vs: { fontSize: FontSize.sm, textTransform: 'uppercase' },
-  score: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, minWidth: 64, textAlign: 'center' },
-  cta: {
-    marginTop: Spacing.sm,
+  vsCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCta: {
+    marginTop: Spacing.md,
+  },
+  ctaPill: {
     borderWidth: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.pill,
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
   },
   footer: {

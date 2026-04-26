@@ -1,119 +1,140 @@
 // Bolzify Design-Tokens
-// Ein einziger Ort für Farben, Typo, Spacing. Alle Screens greifen hier zu.
-// Keine Farbwerte irgendwo inline — wenn was fehlt, hier ergänzen.
+// Ein einziger Ort für Farben, Typo, Spacing, Radien, Schatten.
+// Alle Screens greifen hier zu — keine Magic Numbers in StyleSheets.
 
 import { Platform } from 'react-native';
 
-// Farb-Philosophie:
-// - Grün als Haupt-Akzent (Bolzplatz-Rasen, nicht neon)
-// - Warmes Dunkelbraun als Nostalgie-Akzent (Leder-Ball / alte Tribüne)
-// - Signal-Orange sparsam für CTA & Live-Zustände
-// - Neutral-Graus für Flächen & Text
-// Dark ist der Default-Look ("Flutlicht"), Light als Fallback.
+// Farb-Philosophie 2.0 (Stand v0.15):
+// - Akzent = Tailwind-Grün #22C55E (matched die Web-Pages, kontrastreich auf Dunkel)
+// - Surface = warm-getöntes Anthrazit, leicht ins Grünliche (statt neutral-grau)
+//   → wirkt lebendig, nicht klinisch
+// - True-Black-Background nur für OLED-Optik in Dark
+// - Generell: weniger Saturation, mehr Tiefe durch Layering
 
 const palette = {
-  // Bolzplatz-Grün
-  grass50: '#E8F5E9',
-  grass300: '#66BB6A',
-  grass500: '#2E7D32',
-  grass700: '#1B5E20',
+  // Bolzplatz-Grün (Akzent) — Tailwind-Skala für moderne Apps
+  green50: '#E8FBF0',
+  green200: '#A6EEC1',
+  green400: '#4ADE80',
+  green500: '#22C55E', // Haupt-Akzent
+  green600: '#16A34A',
+  green700: '#15803D',
 
-  // Leder / Nostalgie
-  leather400: '#8D6E63',
-  leather600: '#5D4037',
+  // Leder / Nostalgie — gedämpfter, dezenter Sekundär-Akzent
+  leather400: '#A88671',
+  leather600: '#6B4F3D',
 
-  // Signal / Live
-  signal500: '#FF6F00',
-  signal300: '#FFB74D',
+  // Signal / Live (Orange) — etwas wärmer
+  signal500: '#FB923C',
+  signal400: '#FDBA74',
 
   // Status
-  danger500: '#D32F2F',
-  warn500: '#F9A825',
-  success500: '#388E3C',
+  danger500: '#F43F5E', // Rosa-Rot, weicher als reines Rot
+  warn500: '#F59E0B',
+  success500: '#22C55E',
 
-  // Neutral
-  neutral0: '#FFFFFF',
-  neutral50: '#FAFAFA',
-  neutral100: '#F5F5F5',
-  neutral200: '#EEEEEE',
-  neutral300: '#E0E0E0',
-  neutral500: '#9E9E9E',
-  neutral700: '#424242',
-  neutral800: '#2A2A2A',
-  neutral900: '#1A1A1A',
-  neutral950: '#0F0F0F',
+  // Neutrale Skala — leicht ins Grüne getönt für Konsistenz mit Akzent
+  // (statt purer Grau-Skala — gibt der App eine klare Tönung)
+  ink0: '#FFFFFF',
+  ink50: '#F7F9F8',
+  ink100: '#EFF3F0',
+  ink200: '#DDE4DF',
+  ink300: '#B8C4BC',
+  ink400: '#7E8E83',
+  ink500: '#5A695F',
+  ink600: '#3E4944',
+  ink700: '#2A322D',
+  ink800: '#1B221E',
+  ink900: '#121613',
+  ink950: '#0A0D0B', // True-Black mit Hauch Grün
 };
 
 export const Colors = {
   dark: {
-    // Hintergründe
-    bg: palette.neutral950,
-    background: palette.neutral950, // alias für Legacy-Themed-View
-    surface: palette.neutral900,
-    surfaceElevated: palette.neutral800,
-    border: palette.neutral700,
+    // Hintergründe — 3-stufiges Layering für Tiefe
+    bg: palette.ink950,
+    background: palette.ink950, // alias für Legacy-Themed-View
+    surface: palette.ink800,
+    surfaceElevated: palette.ink700,
+    surfaceHi: palette.ink600, // höchste Elevation (Modals, Pop-Ups)
+    border: 'rgba(255,255,255,0.06)', // sehr dezenter Border (statt fester Linie)
+    borderStrong: 'rgba(255,255,255,0.12)',
 
     // Text
-    text: '#ECEDEE',
-    textMuted: '#9BA1A6',
-    textFaint: '#6E7478',
+    text: '#F2F5F3',
+    textMuted: palette.ink400,
+    textFaint: palette.ink500,
 
     // Akzente
-    accent: palette.grass500,
-    accentHover: palette.grass300,
-    accentFg: palette.neutral0,
-    tint: palette.grass300, // alias
+    accent: palette.green500,
+    accentSoft: 'rgba(34,197,94,0.14)', // für Background-Tints
+    accentBorder: 'rgba(34,197,94,0.35)',
+    accentHover: palette.green400,
+    accentFg: '#062611',
+    tint: palette.green400, // alias
 
     nostalgia: palette.leather400,
 
     // Zustände
     live: palette.signal500,
-    liveFg: palette.neutral0,
+    liveFg: '#1A0F00',
+    liveSoft: 'rgba(251,146,60,0.16)',
     danger: palette.danger500,
+    dangerSoft: 'rgba(244,63,94,0.16)',
     success: palette.success500,
     warn: palette.warn500,
+    warnSoft: 'rgba(245,158,11,0.16)',
 
     // Tabs / Icons
-    icon: '#9BA1A6',
-    tabActive: palette.grass300,
-    tabInactive: palette.neutral500,
-    tabIconDefault: palette.neutral500,
-    tabIconSelected: palette.grass300,
+    icon: palette.ink400,
+    tabActive: palette.green400,
+    tabInactive: palette.ink500,
+    tabIconDefault: palette.ink500,
+    tabIconSelected: palette.green400,
   },
   light: {
-    bg: palette.neutral0,
-    background: palette.neutral0,
-    surface: palette.neutral50,
-    surfaceElevated: palette.neutral100,
-    border: palette.neutral300,
+    bg: palette.ink50,
+    background: palette.ink50,
+    surface: palette.ink0,
+    surfaceElevated: palette.ink100,
+    surfaceHi: palette.ink0,
+    border: 'rgba(0,0,0,0.06)',
+    borderStrong: 'rgba(0,0,0,0.12)',
 
-    text: '#11181C',
-    textMuted: '#687076',
-    textFaint: '#9BA1A6',
+    text: '#0F1A12',
+    textMuted: palette.ink500,
+    textFaint: palette.ink400,
 
-    accent: palette.grass700,
-    accentHover: palette.grass500,
-    accentFg: palette.neutral0,
-    tint: palette.grass700,
+    accent: palette.green600,
+    accentSoft: 'rgba(34,197,94,0.10)',
+    accentBorder: 'rgba(22,163,74,0.30)',
+    accentHover: palette.green500,
+    accentFg: palette.ink0,
+    tint: palette.green600,
 
     nostalgia: palette.leather600,
 
     live: palette.signal500,
-    liveFg: palette.neutral0,
+    liveFg: palette.ink0,
+    liveSoft: 'rgba(251,146,60,0.12)',
     danger: palette.danger500,
+    dangerSoft: 'rgba(244,63,94,0.10)',
     success: palette.success500,
     warn: palette.warn500,
+    warnSoft: 'rgba(245,158,11,0.10)',
 
-    icon: '#687076',
-    tabActive: palette.grass700,
-    tabInactive: palette.neutral500,
-    tabIconDefault: palette.neutral500,
-    tabIconSelected: palette.grass700,
+    icon: palette.ink500,
+    tabActive: palette.green600,
+    tabInactive: palette.ink400,
+    tabIconDefault: palette.ink400,
+    tabIconSelected: palette.green600,
   },
 };
 
-// 8pt-Grid. In StyleSheets: `padding: Spacing.md` statt Magic Numbers.
+// 4pt-Grid (feiner als 8pt für Mikro-Layouts).
+// In StyleSheets: `padding: Spacing.md` statt Magic Numbers.
 export const Spacing = {
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,
@@ -121,13 +142,17 @@ export const Spacing = {
   xl: 24,
   xxl: 32,
   xxxl: 48,
+  jumbo: 64,
 };
 
+// Radien — moderne Apps sind großzügig rund. Pille für Pills/Buttons.
+// Kein Wert unter 10 (eckige Karten wirken altmodisch).
 export const Radius = {
-  sm: 6,
-  md: 10,
-  lg: 14,
-  xl: 20,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 28,
+  xxl: 36,
   pill: 999,
 };
 
@@ -136,9 +161,10 @@ export const FontSize = {
   sm: 13,
   md: 15,
   lg: 17,
-  xl: 20,
-  xxl: 26,
-  display: 34,
+  xl: 22,
+  xxl: 28,
+  display: 36,
+  jumbo: 44,
 };
 
 export const FontWeight = {
@@ -146,25 +172,67 @@ export const FontWeight = {
   medium: '500' as const,
   semibold: '600' as const,
   bold: '700' as const,
+  heavy: '800' as const,
 };
+
+// Sub-pixel letter-spacing für tighter, moderne Display-Texte.
+export const LetterSpacing = {
+  display: -0.6,
+  heading: -0.3,
+  body: 0,
+  label: 0.4, // für UPPERCASE-Section-Labels
+};
+
+// Schatten-System. Auf Android wird `elevation` genutzt, auf iOS die Shadow-Props.
+// Wir geben pro Stufe ein passendes Gesamtobjekt zurück, sodass Components
+// einfach `...Shadow.md` spreaden können.
+export const Shadow = Platform.select({
+  ios: {
+    sm: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.18,
+      shadowRadius: 6,
+    },
+    md: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.22,
+      shadowRadius: 14,
+    },
+    lg: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.28,
+      shadowRadius: 24,
+    },
+  },
+  default: {
+    sm: { elevation: 2 },
+    md: { elevation: 6 },
+    lg: { elevation: 12 },
+  },
+})!;
 
 export const Fonts = Platform.select({
   ios: {
+    // Moderne iOS-Apps nutzen ui-rounded für freundlichere, weichere Wirkung.
+    // System-Default für Body, Rounded für Headlines + UI-Akzente.
     sans: 'system-ui',
-    serif: 'ui-serif',
     rounded: 'ui-rounded',
+    serif: 'ui-serif',
     mono: 'ui-monospace',
   },
   default: {
     sans: 'normal',
-    serif: 'serif',
     rounded: 'normal',
+    serif: 'serif',
     mono: 'monospace',
   },
   web: {
     sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    rounded: "'SF Pro Rounded', system-ui, -apple-system, sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   },
 });

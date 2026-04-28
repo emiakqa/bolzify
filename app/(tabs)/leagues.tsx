@@ -2,7 +2,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -11,7 +10,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Radius,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -109,66 +121,96 @@ export default function LeaguesScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
+        }>
         <ThemedText style={[styles.title, { color: c.text }]}>Ligen</ThemedText>
 
         <View style={styles.ctaRow}>
-          <Pressable
+          <Button
+            label="Erstellen"
             onPress={() => router.push('/leagues-new')}
-            style={({ pressed }) => [
-              styles.ctaPrimary,
-              { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
-            ]}>
-            <ThemedText style={{ color: c.accentFg, fontWeight: FontWeight.semibold, fontSize: FontSize.md }}>
-              + Erstellen
-            </ThemedText>
-          </Pressable>
-          <Pressable
+            fullWidth
+            style={{ flex: 1 }}
+          />
+          <Button
+            label="Beitreten"
+            variant="secondary"
             onPress={() => router.push('/leagues-join')}
-            style={({ pressed }) => [
-              styles.ctaSecondary,
-              { borderColor: c.border, backgroundColor: c.surface, opacity: pressed ? 0.85 : 1 },
-            ]}>
-            <ThemedText style={{ color: c.text, fontWeight: FontWeight.semibold, fontSize: FontSize.md }}>
-              Beitreten
-            </ThemedText>
-          </Pressable>
+            fullWidth
+            style={{ flex: 1 }}
+          />
         </View>
 
         {loading ? (
-          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Card>
             <ActivityIndicator color={c.textMuted} />
-          </View>
+          </Card>
         ) : leagues.length === 0 ? (
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: c.surface, borderColor: c.border, alignItems: 'center', gap: Spacing.md },
-            ]}>
-            <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
+          <Card padding="xl" style={styles.emptyCard}>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+                textAlign: 'center',
+              }}>
               Noch keine Liga.{'\n'}Nutze die Buttons oben, um zu starten.
             </ThemedText>
-          </View>
+          </Card>
         ) : (
-          leagues.map((l) => (
-            <Pressable
-              key={l.id}
-              onPress={() => router.push({ pathname: '/leagues/[id]', params: { id: l.id } })}
-              style={({ pressed }) => [
-                styles.row,
-                { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.85 : 1 },
-              ]}>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={{ color: c.text, fontSize: FontSize.lg, fontWeight: FontWeight.semibold }}>
-                  {l.name}
-                </ThemedText>
-                <ThemedText style={{ color: c.textMuted, fontSize: FontSize.sm, marginTop: 2 }}>
-                  {l.member_count} {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'} · Code {l.invite_code}
-                </ThemedText>
-              </View>
-              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>›</ThemedText>
-            </Pressable>
-          ))
+          <View style={{ gap: Spacing.sm }}>
+            {leagues.map((l) => (
+              <Card
+                key={l.id}
+                padding="md"
+                onPress={() =>
+                  router.push({ pathname: '/leagues/[id]', params: { id: l.id } })
+                }>
+                <View style={styles.row}>
+                  <View style={[styles.iconSquare, { backgroundColor: c.accentSoft }]}>
+                    <IconSymbol name="person.3.fill" size={18} color={c.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText
+                      style={{
+                        color: c.text,
+                        fontSize: FontSize.md,
+                        lineHeight: LineHeight.md,
+                        fontFamily: Fonts?.rounded,
+                        fontWeight: FontWeight.semibold,
+                      }}>
+                      {l.name}
+                    </ThemedText>
+                    <View style={styles.metaRow}>
+                      <ThemedText
+                        style={{
+                          color: c.textMuted,
+                          fontSize: FontSize.sm,
+                          lineHeight: LineHeight.sm,
+                          fontFamily: Fonts?.rounded,
+                        }}>
+                        {l.member_count}{' '}
+                        {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'}
+                      </ThemedText>
+                      <Badge label={l.invite_code} tone="neutral" />
+                    </View>
+                  </View>
+                  <ThemedText
+                    style={{
+                      color: c.textFaint,
+                      fontSize: FontSize.xl,
+                      lineHeight: LineHeight.xl,
+                      fontFamily: Fonts?.rounded,
+                    }}>
+                    ›
+                  </ThemedText>
+                </View>
+              </Card>
+            ))}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -177,32 +219,39 @@ export default function LeaguesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl, gap: Spacing.md },
-  title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, marginBottom: Spacing.sm },
-  ctaRow: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.sm },
-  ctaPrimary: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    alignItems: 'center',
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo, gap: Spacing.md },
+  title: {
+    fontSize: FontSize.xxl,
+    lineHeight: LineHeight.xxl,
+    fontWeight: FontWeight.heavy,
+    fontFamily: Fonts?.rounded,
+    letterSpacing: LetterSpacing.heading,
+    marginBottom: Spacing.sm,
   },
-  ctaSecondary: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    borderWidth: 1,
+  ctaRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
-  card: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.lg,
+  emptyCard: {
+    alignItems: 'center',
   },
   row: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.md,
+  },
+  iconSquare: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: 4,
   },
 });

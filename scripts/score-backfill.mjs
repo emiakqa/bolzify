@@ -2,7 +2,7 @@
 //
 // Zweck: Für alle bereits finishten Matches die Scoring-Function aufrufen.
 // Nötig, weil der Trigger nur bei UPDATE feuert — Matches, die beim Import
-// schon als 'finished' reinkamen (WM 2022 Dev-Daten), wurden übersprungen.
+// schon als 'finished' reinkamen, wurden übersprungen.
 //
 // Idempotent: score_match überschreibt per UPSERT, kein Risk bei Re-Run.
 //

@@ -112,6 +112,8 @@ function AuthGate() {
       <Stack.Screen name="profile" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="settings" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="special-tips" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="inbox" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="broadcast-new" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="impressum" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
     </Stack>

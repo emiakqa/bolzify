@@ -110,8 +110,8 @@ const rows = fixtures.map((f) => {
   // Sieger eines KO-Spiels. Bei Gruppen-Unentschieden sind beide false/null.
   // Bei Gruppen-Siegen ist es auch true → wir setzen es trotzdem (schadet
   // nicht, ist nur für KO relevant). Bei Elfmeterschießen liefert api-football
-  // den Sieger korrekt (z.B. WM2022-Final: home=Argentinien.winner=true,
-  // obwohl goals 3:3) — genau das brauchen wir für score_special_tips().
+  // den Sieger korrekt (z.B. home=Sieger.winner=true obwohl goals 3:3) —
+  // genau das brauchen wir für score_special_tips().
   let winner_team_id = null;
   if (f.teams.home?.winner === true) winner_team_id = f.teams.home.id ?? null;
   else if (f.teams.away?.winner === true) winner_team_id = f.teams.away.id ?? null;

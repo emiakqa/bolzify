@@ -1,20 +1,26 @@
 import * as Application from 'expo-application';
 import { Image } from 'expo-image';
-import { Stack, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// TODO(2026-05): Sobald GitHub Pages public live ist, sind diese URLs
-// erreichbar. Bis dahin liefern sie 404 — App-Store-Submission braucht
-// das aber sowieso erst zum Beta-Test-Start.
-const PRIVACY_URL = 'https://emiakqa.github.io/bolzify/privacy.html';
-const SUPPORT_URL = 'https://emiakqa.github.io/bolzify/support.html';
-
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { SectionHeader } from '@/components/ui/section-header';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
+import { getUnreadCount, isAppAdmin } from '@/lib/inbox';
 import {
   clearAllReminders,
   getRemindersEnabled,
@@ -24,6 +30,12 @@ import {
 import { resetOnboarding } from '@/lib/onboarding';
 import { clearLocalSession, supabase } from '@/lib/supabase';
 
+// TODO(2026-05): Sobald GitHub Pages public live ist, sind diese URLs
+// erreichbar. Bis dahin liefern sie 404 — App-Store-Submission braucht
+// das aber sowieso erst zum Beta-Test-Start.
+const PRIVACY_URL = 'https://emiakqa.github.io/bolzify/privacy.html';
+const SUPPORT_URL = 'https://emiakqa.github.io/bolzify/support.html';
+
 export default function SettingsScreen() {
   const { user, profile, signOut } = useAuth();
   const router = useRouter();
@@ -32,10 +44,26 @@ export default function SettingsScreen() {
 
   const [remindersOn, setRemindersOn] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
     getRemindersEnabled().then(setRemindersOn);
   }, []);
+
+  // Admin-Check ein Mal pro Mount
+  useEffect(() => {
+    if (!user) return;
+    isAppAdmin(user.id).then(setAdmin);
+  }, [user]);
+
+  // Unread bei jedem Focus neu laden (z.B. nach Rückkehr aus Inbox)
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      getUnreadCount(user.id).then(setUnread);
+    }, [user]),
+  );
 
   const toggleReminders = async (v: boolean) => {
     setRemindersOn(v);
@@ -79,153 +107,263 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-          <ThemedText style={{ color: c.textMuted }}>← Zurück</ThemedText>
+          <ThemedText
+            style={{ color: c.textMuted, fontFamily: Fonts?.rounded, fontSize: FontSize.md }}>
+            ← Zurück
+          </ThemedText>
         </Pressable>
 
         <ThemedText style={[styles.h1, { color: c.text }]}>Einstellungen</ThemedText>
 
-        {/* Profil-Row */}
-        <Pressable
-          onPress={() => router.push('/profile')}
-          style={({ pressed }) => [
-            styles.profileRow,
-            {
-              backgroundColor: c.surface,
-              borderColor: c.border,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <View
-            style={[
-              styles.avatarCircle,
-              { borderColor: c.border, backgroundColor: c.surfaceElevated },
-            ]}>
-            {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                style={{ width: '100%', height: '100%' }}
-                contentFit="cover"
-              />
-            ) : (
-              <ThemedText style={{ fontSize: 22 }}>👤</ThemedText>
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <ThemedText
-              style={{
-                color: c.text,
-                fontSize: FontSize.lg,
-                fontWeight: FontWeight.semibold,
-              }}>
-              @{profile?.username ?? '—'}
-            </ThemedText>
-            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs, marginTop: 2 }}>
-              Profil bearbeiten
-            </ThemedText>
-          </View>
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>›</ThemedText>
-        </Pressable>
-
-        <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>
-          Benachrichtigungen
-        </ThemedText>
-        <View style={[styles.row, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <View style={{ flex: 1 }}>
-            <ThemedText
-              style={{
-                color: c.text,
-                fontSize: FontSize.md,
-                fontWeight: FontWeight.medium,
-              }}>
-              Tipp-Erinnerungen
-            </ThemedText>
-            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs, marginTop: 2 }}>
-              1 Stunde vor Anpfiff, wenn du noch nicht getippt hast
-            </ThemedText>
-          </View>
-          <Switch
-            value={remindersOn}
-            onValueChange={toggleReminders}
-            trackColor={{ true: c.accent, false: c.border }}
-            thumbColor={c.accentFg}
-          />
-        </View>
-
-        <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Account</ThemedText>
-        <Pressable
-          onPress={signOut}
-          style={({ pressed }) => [
-            styles.row,
-            {
-              backgroundColor: c.surface,
-              borderColor: c.border,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.md,
-              fontWeight: FontWeight.medium,
-              flex: 1,
-            }}>
-            Abmelden
-          </ThemedText>
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>
-            {user?.email ?? ''}
-          </ThemedText>
-        </Pressable>
-        <Pressable
-          onPress={confirmDelete}
-          disabled={deleting}
-          style={({ pressed }) => [
-            styles.row,
-            {
-              backgroundColor: c.surface,
-              borderColor: c.danger,
-              opacity: pressed || deleting ? 0.7 : 1,
-            },
-          ]}>
-          <ThemedText
-            style={{
-              color: c.danger,
-              fontSize: FontSize.md,
-              fontWeight: FontWeight.medium,
-            }}>
-            {deleting ? 'Lösche…' : 'Account löschen'}
-          </ThemedText>
-        </Pressable>
-
-        {__DEV__ ? (
-          <>
-            <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Dev</ThemedText>
-            <Pressable
-              onPress={async () => {
-                await resetOnboarding();
-                router.replace('/onboarding');
-              }}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  backgroundColor: c.surface,
-                  borderColor: c.border,
-                  opacity: pressed ? 0.85 : 1,
-                },
+        {/* Profil-Row als Hero-Card */}
+        <Card padding="md" onPress={() => router.push('/profile')} style={styles.profileCard}>
+          <View style={styles.profileRow}>
+            <View
+              style={[
+                styles.avatarCircle,
+                { borderColor: c.border, backgroundColor: c.surfaceElevated },
               ]}>
+              {profile?.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                />
+              ) : (
+                <ThemedText style={{ fontSize: 22 }}>👤</ThemedText>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText
+                style={{
+                  color: c.text,
+                  fontSize: FontSize.lg,
+                  lineHeight: LineHeight.lg,
+                  fontFamily: Fonts?.rounded,
+                  fontWeight: FontWeight.semibold,
+                }}>
+                @{profile?.username ?? '—'}
+              </ThemedText>
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.xs,
+                  lineHeight: LineHeight.xs,
+                  fontFamily: Fonts?.rounded,
+                  marginTop: 2,
+                }}>
+                Profil bearbeiten
+              </ThemedText>
+            </View>
+            <ThemedText
+              style={{
+                color: c.textFaint,
+                fontSize: FontSize.xl,
+                lineHeight: LineHeight.xl,
+                fontFamily: Fonts?.rounded,
+              }}>
+              ›
+            </ThemedText>
+          </View>
+        </Card>
+
+        <SectionHeader title="Postfach" marginTop={Spacing.lg} />
+        <Card padding="md" onPress={() => router.push('/inbox')} style={styles.cardSpacing}>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
               <ThemedText
                 style={{
                   color: c.text,
                   fontSize: FontSize.md,
-                  fontWeight: FontWeight.medium,
-                  flex: 1,
+                  lineHeight: LineHeight.md,
+                  fontFamily: Fonts?.rounded,
+                  fontWeight: FontWeight.semibold,
                 }}>
-                Onboarding zurücksetzen
+                Nachrichten
               </ThemedText>
-              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>DEV</ThemedText>
-            </Pressable>
-            <Pressable
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.xs,
+                  lineHeight: LineHeight.xs,
+                  fontFamily: Fonts?.rounded,
+                  marginTop: 2,
+                }}>
+                Liga-Ankündigungen & News vom Bolzify-Team
+              </ThemedText>
+            </View>
+            {unread > 0 ? <Badge label={`${unread} neu`} tone="accent" /> : null}
+            <ThemedText
+              style={{
+                color: c.textFaint,
+                fontSize: FontSize.xl,
+                lineHeight: LineHeight.xl,
+                fontFamily: Fonts?.rounded,
+              }}>
+              ›
+            </ThemedText>
+          </View>
+        </Card>
+        {admin ? (
+          <Card
+            padding="md"
+            onPress={() => router.push('/broadcast-new')}
+            style={styles.cardSpacing}>
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <ThemedText
+                  style={{
+                    color: c.text,
+                    fontSize: FontSize.md,
+                    lineHeight: LineHeight.md,
+                    fontFamily: Fonts?.rounded,
+                    fontWeight: FontWeight.semibold,
+                  }}>
+                  Broadcast senden
+                </ThemedText>
+                <ThemedText
+                  style={{
+                    color: c.textMuted,
+                    fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
+                    marginTop: 2,
+                  }}>
+                  Nachricht an alle App-User
+                </ThemedText>
+              </View>
+              <Badge label="Admin" tone="warn" />
+              <ThemedText
+                style={{
+                  color: c.textFaint,
+                  fontSize: FontSize.xl,
+                  lineHeight: LineHeight.xl,
+                  fontFamily: Fonts?.rounded,
+                }}>
+                ›
+              </ThemedText>
+            </View>
+          </Card>
+        ) : null}
+
+        <SectionHeader title="Benachrichtigungen" marginTop={Spacing.lg} />
+        <Card padding="md" style={styles.cardSpacing}>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <ThemedText
+                style={{
+                  color: c.text,
+                  fontSize: FontSize.md,
+                  lineHeight: LineHeight.md,
+                  fontFamily: Fonts?.rounded,
+                  fontWeight: FontWeight.semibold,
+                }}>
+                Tipp-Erinnerungen
+              </ThemedText>
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.xs,
+                  lineHeight: LineHeight.xs,
+                  fontFamily: Fonts?.rounded,
+                  marginTop: 2,
+                }}>
+                1 Stunde vor Anpfiff, wenn du noch nicht getippt hast
+              </ThemedText>
+            </View>
+            <Switch
+              value={remindersOn}
+              onValueChange={toggleReminders}
+              trackColor={{ true: c.accent, false: c.border }}
+              thumbColor={c.accentFg}
+            />
+          </View>
+        </Card>
+
+        <SectionHeader title="Account" />
+        <Card padding="md" onPress={signOut} style={styles.cardSpacing}>
+          <View style={styles.row}>
+            <ThemedText
+              style={{
+                color: c.text,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.semibold,
+                flex: 1,
+              }}>
+              Abmelden
+            </ThemedText>
+            <ThemedText
+              style={{
+                color: c.textFaint,
+                fontSize: FontSize.xs,
+                lineHeight: LineHeight.xs,
+                fontFamily: Fonts?.rounded,
+              }}
+              numberOfLines={1}>
+              {user?.email ?? ''}
+            </ThemedText>
+          </View>
+        </Card>
+        <Card
+          padding="md"
+          onPress={confirmDelete}
+          disabled={deleting}
+          style={{ ...styles.cardSpacing, borderColor: c.danger }}>
+          <View style={styles.row}>
+            <ThemedText
+              style={{
+                color: c.danger,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.semibold,
+              }}>
+              {deleting ? 'Lösche…' : 'Account löschen'}
+            </ThemedText>
+          </View>
+        </Card>
+
+        {__DEV__ ? (
+          <>
+            <SectionHeader title="Dev" />
+            <Card
+              padding="md"
+              onPress={async () => {
+                await resetOnboarding();
+                router.replace('/onboarding');
+              }}
+              style={styles.cardSpacing}>
+              <View style={styles.row}>
+                <ThemedText
+                  style={{
+                    color: c.text,
+                    fontSize: FontSize.md,
+                    lineHeight: LineHeight.md,
+                    fontFamily: Fonts?.rounded,
+                    fontWeight: FontWeight.semibold,
+                    flex: 1,
+                  }}>
+                  Onboarding zurücksetzen
+                </ThemedText>
+                <ThemedText
+                  style={{
+                    color: c.textFaint,
+                    fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: LetterSpacing.label,
+                  }}>
+                  DEV
+                </ThemedText>
+              </View>
+            </Card>
+            <Card
+              padding="md"
               onPress={async () => {
                 // Direkter SecureStore-Wipe, umgeht Supabase's Auth-Lock.
                 // Nötig, wenn der Auth-Lock hängt und supabase.auth.signOut
@@ -236,123 +374,167 @@ export default function SettingsScreen() {
                   'Bitte App im Task-Switcher komplett schließen und neu öffnen, damit Supabase sauber neu initialisiert.',
                 );
               }}
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  backgroundColor: c.surface,
-                  borderColor: c.danger,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}>
-              <ThemedText
-                style={{
-                  color: c.danger,
-                  fontSize: FontSize.md,
-                  fontWeight: FontWeight.medium,
-                  flex: 1,
-                }}>
-                Session hart leeren (SecureStore-Wipe)
-              </ThemedText>
-              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>DEV</ThemedText>
-            </Pressable>
+              style={{ ...styles.cardSpacing, borderColor: c.danger }}>
+              <View style={styles.row}>
+                <ThemedText
+                  style={{
+                    color: c.danger,
+                    fontSize: FontSize.md,
+                    lineHeight: LineHeight.md,
+                    fontFamily: Fonts?.rounded,
+                    fontWeight: FontWeight.semibold,
+                    flex: 1,
+                  }}>
+                  Session hart leeren (SecureStore-Wipe)
+                </ThemedText>
+                <ThemedText
+                  style={{
+                    color: c.textFaint,
+                    fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: LetterSpacing.label,
+                  }}>
+                  DEV
+                </ThemedText>
+              </View>
+            </Card>
           </>
         ) : null}
 
-        <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Info</ThemedText>
-        <Pressable
+        <SectionHeader title="Info" />
+        <Card
+          padding="md"
           onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
-          style={({ pressed }) => [
-            styles.row,
-            {
-              backgroundColor: c.surface,
-              borderColor: c.border,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.md,
-              fontWeight: FontWeight.medium,
-              flex: 1,
-            }}>
-            Datenschutz
-          </ThemedText>
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>↗</ThemedText>
-        </Pressable>
-        <Pressable
+          style={styles.cardSpacing}>
+          <View style={styles.row}>
+            <ThemedText
+              style={{
+                color: c.text,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.semibold,
+                flex: 1,
+              }}>
+              Datenschutz
+            </ThemedText>
+            <ThemedText
+              style={{
+                color: c.textFaint,
+                fontSize: FontSize.lg,
+                lineHeight: LineHeight.lg,
+                fontFamily: Fonts?.rounded,
+              }}>
+              ↗
+            </ThemedText>
+          </View>
+        </Card>
+        <Card
+          padding="md"
           onPress={() => Linking.openURL(SUPPORT_URL).catch(() => {})}
-          style={({ pressed }) => [
-            styles.row,
-            {
-              backgroundColor: c.surface,
-              borderColor: c.border,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.md,
-              fontWeight: FontWeight.medium,
-              flex: 1,
-            }}>
-            Support & FAQ
-          </ThemedText>
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>↗</ThemedText>
-        </Pressable>
-        <Pressable
+          style={styles.cardSpacing}>
+          <View style={styles.row}>
+            <ThemedText
+              style={{
+                color: c.text,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.semibold,
+                flex: 1,
+              }}>
+              Support & FAQ
+            </ThemedText>
+            <ThemedText
+              style={{
+                color: c.textFaint,
+                fontSize: FontSize.lg,
+                lineHeight: LineHeight.lg,
+                fontFamily: Fonts?.rounded,
+              }}>
+              ↗
+            </ThemedText>
+          </View>
+        </Card>
+        <Card
+          padding="md"
           onPress={() => router.push('/impressum')}
-          style={({ pressed }) => [
-            styles.row,
-            {
-              backgroundColor: c.surface,
-              borderColor: c.border,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}>
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.md,
-              fontWeight: FontWeight.medium,
-              flex: 1,
-            }}>
-            Impressum
-          </ThemedText>
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.lg }}>›</ThemedText>
-        </Pressable>
-        <View style={[styles.row, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.md,
-              fontWeight: FontWeight.medium,
-              flex: 1,
-            }}>
-            Version
-          </ThemedText>
-          <ThemedText style={{ color: c.textMuted, fontSize: FontSize.sm }}>
-            {versionText}
-          </ThemedText>
-        </View>
+          style={styles.cardSpacing}>
+          <View style={styles.row}>
+            <ThemedText
+              style={{
+                color: c.text,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.semibold,
+                flex: 1,
+              }}>
+              Impressum
+            </ThemedText>
+            <ThemedText
+              style={{
+                color: c.textFaint,
+                fontSize: FontSize.xl,
+                lineHeight: LineHeight.xl,
+                fontFamily: Fonts?.rounded,
+              }}>
+              ›
+            </ThemedText>
+          </View>
+        </Card>
+        <Card padding="md" style={styles.cardSpacing}>
+          <View style={styles.row}>
+            <ThemedText
+              style={{
+                color: c.text,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.semibold,
+                flex: 1,
+              }}>
+              Version
+            </ThemedText>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.sm,
+                lineHeight: LineHeight.sm,
+                fontFamily: Fonts?.rounded,
+              }}>
+              {versionText}
+            </ThemedText>
+          </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo },
   back: { marginBottom: Spacing.md },
-  h1: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, marginBottom: Spacing.xl },
+  h1: {
+    fontSize: FontSize.xxl,
+    lineHeight: LineHeight.xxl,
+    fontWeight: FontWeight.heavy,
+    fontFamily: Fonts?.rounded,
+    letterSpacing: LetterSpacing.heading,
+    marginBottom: Spacing.lg,
+  },
+  profileCard: {
+    marginBottom: Spacing.sm,
+  },
+  cardSpacing: {
+    marginBottom: Spacing.sm,
+  },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
   },
   avatarCircle: {
     width: 48,
@@ -363,20 +545,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  sectionLabel: {
-    fontSize: FontSize.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: FontWeight.semibold,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
+    gap: Spacing.md,
   },
 });

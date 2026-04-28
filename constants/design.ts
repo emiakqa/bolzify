@@ -167,6 +167,22 @@ export const FontSize = {
   jumbo: 44,
 };
 
+// Explizite Line-Heights — zwingend für große Headlines, da iOS mit
+// `ui-rounded`-Font sehr knappe Default-Metrics hat und Großbuchstaben oben
+// abschneidet. Faustregel: ~1.15-1.2 × FontSize für Headlines, ~1.4 für Fließtext.
+// Mind. 4-6pt extra Spielraum, sonst werden Akzent-Buchstaben (Ä, Ö, Ü, @, /)
+// am oberen Rand geclippt.
+export const LineHeight = {
+  xs: 14,
+  sm: 18,
+  md: 22,
+  lg: 24,
+  xl: 28,
+  xxl: 34,
+  display: 44,
+  jumbo: 54,
+};
+
 export const FontWeight = {
   regular: '400' as const,
   medium: '500' as const,

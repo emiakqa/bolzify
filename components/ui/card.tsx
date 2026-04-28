@@ -18,6 +18,7 @@ type Props = {
   padding?: keyof typeof Spacing | 0;
   style?: ViewStyle | ViewStyle[];
   onPress?: PressableProps['onPress'];
+  onLongPress?: PressableProps['onLongPress'];
   disabled?: boolean;
 };
 
@@ -35,6 +36,7 @@ export function Card({
   padding = 'lg',
   style,
   onPress,
+  onLongPress,
   disabled,
 }: Props) {
   const scheme = useColorScheme() ?? 'dark';
@@ -49,10 +51,11 @@ export function Card({
     ...(variant === 'elevated' ? Shadow.md : null),
   };
 
-  if (onPress) {
+  if (onPress || onLongPress) {
     return (
       <Pressable
         onPress={onPress}
+        onLongPress={onLongPress}
         disabled={disabled}
         style={({ pressed }) => [
           baseStyle,

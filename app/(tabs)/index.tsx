@@ -23,6 +23,7 @@ import {
   FontWeight,
   Fonts,
   LetterSpacing,
+  LineHeight,
   Radius,
   Spacing,
 } from '@/constants/design';
@@ -80,9 +81,14 @@ export default function HomeScreen() {
   const load = useCallback(async () => {
     const t0 = Date.now();
     console.log('[Home] load() start, userId=', userId);
+    // Tournament-Filter zwingend — sonst zieht der "letztes finished"-Fallback
+    // Daten anderer Turniere ins Frontend, falls das aktive Turnier noch keine
+    // gespielten Matches hat.
+    const tournament = await getCurrentTournament();
     const { data: matches, error: mErr } = await supabase
       .from('matches')
       .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+      .eq('tournament', tournament)
       .eq('status', 'scheduled')
       .gt('kickoff_at', new Date().toISOString())
       .order('kickoff_at', { ascending: true })
@@ -102,6 +108,7 @@ export default function HomeScreen() {
       const { data: last } = await supabase
         .from('matches')
         .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+        .eq('tournament', tournament)
         .eq('status', 'finished')
         .order('kickoff_at', { ascending: false })
         .limit(1);
@@ -111,6 +118,7 @@ export default function HomeScreen() {
       const { data: first } = await supabase
         .from('matches')
         .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+        .eq('tournament', tournament)
         .order('kickoff_at', { ascending: true })
         .limit(1);
       finalMatch = first?.[0] ?? null;
@@ -130,7 +138,6 @@ export default function HomeScreen() {
     }
 
     if (userId) {
-      const tournament = await getCurrentTournament();
       const { data: special } = await supabase
         .from('special_tips')
         .select(
@@ -226,6 +233,7 @@ export default function HomeScreen() {
               style={{
                 color: c.textMuted,
                 fontSize: FontSize.sm,
+                lineHeight: LineHeight.sm,
                 fontFamily: Fonts?.rounded,
                 fontWeight: FontWeight.medium,
               }}>
@@ -235,6 +243,7 @@ export default function HomeScreen() {
               style={{
                 color: c.text,
                 fontSize: FontSize.display,
+                lineHeight: LineHeight.display,
                 fontFamily: Fonts?.rounded,
                 fontWeight: FontWeight.heavy,
                 letterSpacing: LetterSpacing.display,
@@ -474,6 +483,7 @@ function MatchHero({
             style={{
               color: c.text,
               fontSize: FontSize.lg,
+              lineHeight: LineHeight.lg,
               fontFamily: Fonts?.rounded,
               fontWeight: FontWeight.bold,
               textAlign: 'center',
@@ -486,6 +496,7 @@ function MatchHero({
             style={{
               color: c.text,
               fontSize: FontSize.jumbo,
+              lineHeight: LineHeight.jumbo,
               fontFamily: Fonts?.rounded,
               fontWeight: FontWeight.heavy,
               letterSpacing: LetterSpacing.display,
@@ -500,6 +511,7 @@ function MatchHero({
               style={{
                 color: c.accent,
                 fontSize: FontSize.sm,
+                lineHeight: LineHeight.sm,
                 fontFamily: Fonts?.rounded,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.5,
@@ -513,6 +525,7 @@ function MatchHero({
             style={{
               color: c.text,
               fontSize: FontSize.lg,
+              lineHeight: LineHeight.lg,
               fontFamily: Fonts?.rounded,
               fontWeight: FontWeight.bold,
               textAlign: 'center',

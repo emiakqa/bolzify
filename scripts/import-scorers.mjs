@@ -9,8 +9,8 @@
 //
 // Usage:
 //   node scripts/import-scorers.mjs                    # alle finished matches
-//   node scripts/import-scorers.mjs WM2022             # nur Turnier
-//   node scripts/import-scorers.mjs WM2022 --force     # auch schon importierte refreshen
+//   node scripts/import-scorers.mjs WM2026             # nur Turnier
+//   node scripts/import-scorers.mjs WM2026 --force     # auch schon importierte refreshen
 //
 // Nach Import: `node scripts/score-backfill.mjs` ausführen, damit der Bonus
 // in scored_tips einfließt.

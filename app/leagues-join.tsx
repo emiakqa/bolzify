@@ -12,7 +12,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Button } from '@/components/ui/button';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Radius,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { isValidInviteCode, normalizeInviteCode } from '@/lib/invite';
@@ -66,7 +76,15 @@ export default function JoinLeagueScreen() {
         style={{ flex: 1 }}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
-            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.md }}>Abbrechen</ThemedText>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+              }}>
+              Abbrechen
+            </ThemedText>
           </Pressable>
           <ThemedText style={[styles.title, { color: c.text }]}>Liga beitreten</ThemedText>
           <View style={{ width: 72 }} />
@@ -87,27 +105,34 @@ export default function JoinLeagueScreen() {
             onSubmitEditing={onJoin}
             style={[
               styles.input,
-              { color: c.text, backgroundColor: c.surface, borderColor: valid ? c.accent : c.border },
+              {
+                color: c.text,
+                backgroundColor: c.surface,
+                borderColor: valid ? c.accentBorder : c.border,
+                fontFamily: Fonts?.rounded,
+              },
             ]}
           />
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs, marginTop: Spacing.sm }}>
+          <ThemedText
+            style={{
+              color: c.textFaint,
+              fontSize: FontSize.xs,
+              lineHeight: LineHeight.xs,
+              fontFamily: Fonts?.rounded,
+              marginTop: Spacing.sm,
+            }}>
             6 Zeichen, Buchstaben + Zahlen. Vom Liga-Admin zugeschickt.
           </ThemedText>
 
-          <Pressable
+          <Button
+            label={submitting ? 'Trete bei…' : 'Beitreten'}
             onPress={onJoin}
             disabled={!valid || submitting}
-            style={({ pressed }) => [
-              styles.cta,
-              {
-                backgroundColor: c.accent,
-                opacity: !valid || submitting ? 0.5 : pressed ? 0.85 : 1,
-              },
-            ]}>
-            <ThemedText style={{ color: c.accentFg, fontWeight: FontWeight.bold, fontSize: FontSize.md }}>
-              {submitting ? 'Trete bei…' : 'Beitreten'}
-            </ThemedText>
-          </Pressable>
+            loading={submitting}
+            size="lg"
+            fullWidth
+            style={{ marginTop: Spacing.xl }}
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -123,28 +148,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+  title: {
+    fontSize: FontSize.lg,
+    lineHeight: LineHeight.lg,
+    fontWeight: FontWeight.heavy,
+    fontFamily: Fonts?.rounded,
+  },
   body: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: Spacing.sm },
   label: {
     fontSize: FontSize.xs,
+    lineHeight: LineHeight.xs,
+    fontFamily: Fonts?.rounded,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: FontWeight.semibold,
+    letterSpacing: LetterSpacing.label,
+    fontWeight: FontWeight.bold,
   },
   input: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderWidth: 2,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: FontSize.xxl,
-    fontWeight: FontWeight.bold,
+    lineHeight: LineHeight.xxl,
+    fontWeight: FontWeight.heavy,
     letterSpacing: 4,
     textAlign: 'center',
-  },
-  cta: {
-    marginTop: Spacing.xl,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
+    minHeight: 72,
   },
 });

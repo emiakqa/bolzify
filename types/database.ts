@@ -94,6 +94,7 @@ type TeamRow = {
   code: string | null;
   logo_url: string | null;
   tournament: string;
+  group_letter: string | null;  // 'A'..'L', null bei K.O.-Teams
 };
 type TeamInsert = {
   id: number;
@@ -101,6 +102,7 @@ type TeamInsert = {
   code?: string | null;
   logo_url?: string | null;
   tournament?: string;
+  group_letter?: string | null;
 };
 
 type PlayerRow = {
@@ -196,6 +198,8 @@ type ScoredSpecialTipRow = {
   semifinalist_hits: number;      // 0..4
   semifinalist_points: number;    // = hits * 5
   top_scorer_points: number;      // 0 oder 5
+  group_winner_hits: number;      // 0..12
+  group_winner_points: number;    // = hits * 3
   total_points: number;           // generated
   scored_at: string;
 };
@@ -207,7 +211,96 @@ type ScoredSpecialTipInsert = {
   semifinalist_hits?: number;
   semifinalist_points?: number;
   top_scorer_points?: number;
+  group_winner_hits?: number;
+  group_winner_points?: number;
   scored_at?: string;
+};
+
+type GroupWinnerTipRow = {
+  user_id: string;
+  tournament: string;
+  group_letter: string;  // 'A'..'L'
+  team_id: number;
+  created_at: string;
+  updated_at: string;
+};
+type GroupWinnerTipInsert = {
+  user_id: string;
+  tournament?: string;
+  group_letter: string;
+  team_id: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type LeagueAnnouncementRow = {
+  id: string;
+  league_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+type LeagueAnnouncementInsert = {
+  id?: string;
+  league_id: string;
+  author_id: string;
+  body: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type AppAdminRow = {
+  user_id: string;
+  role: string;  // 'owner'
+  added_at: string;
+};
+type AppAdminInsert = {
+  user_id: string;
+  role?: string;
+  added_at?: string;
+};
+
+type BroadcastRow = {
+  id: string;
+  sender_id: string | null;
+  body: string;
+  created_at: string;
+};
+type BroadcastInsert = {
+  id?: string;
+  sender_id: string | null;
+  body: string;
+  created_at?: string;
+};
+
+type InboxItemRow = {
+  id: string;
+  recipient_id: string;
+  kind: 'league_announcement' | 'broadcast';
+  league_announcement_id: string | null;
+  broadcast_id: string | null;
+  league_id: string | null;
+  league_name_snapshot: string | null;
+  sender_id: string | null;
+  sender_username_snapshot: string | null;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+};
+type InboxItemInsert = {
+  id?: string;
+  recipient_id: string;
+  kind: 'league_announcement' | 'broadcast';
+  league_announcement_id?: string | null;
+  broadcast_id?: string | null;
+  league_id?: string | null;
+  league_name_snapshot?: string | null;
+  sender_id?: string | null;
+  sender_username_snapshot?: string | null;
+  body: string;
+  created_at?: string;
+  read_at?: string | null;
 };
 
 export type Database = {
@@ -273,6 +366,36 @@ export type Database = {
         Update: Partial<ScoredSpecialTipInsert>;
         Relationships: [];
       };
+      group_winner_tips: {
+        Row: GroupWinnerTipRow;
+        Insert: GroupWinnerTipInsert;
+        Update: Partial<GroupWinnerTipInsert>;
+        Relationships: [];
+      };
+      league_announcements: {
+        Row: LeagueAnnouncementRow;
+        Insert: LeagueAnnouncementInsert;
+        Update: Partial<LeagueAnnouncementInsert>;
+        Relationships: [];
+      };
+      app_admins: {
+        Row: AppAdminRow;
+        Insert: AppAdminInsert;
+        Update: Partial<AppAdminInsert>;
+        Relationships: [];
+      };
+      broadcasts: {
+        Row: BroadcastRow;
+        Insert: BroadcastInsert;
+        Update: Partial<BroadcastInsert>;
+        Relationships: [];
+      };
+      inbox_items: {
+        Row: InboxItemRow;
+        Insert: InboxItemInsert;
+        Update: Partial<InboxItemInsert>;
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {
@@ -295,6 +418,10 @@ export type Database = {
       score_special_tips: {
         Args: { p_tournament: string };
         Returns: number;
+      };
+      is_app_admin: {
+        Args: { p_user: string };
+        Returns: boolean;
       };
     };
     Enums: {};

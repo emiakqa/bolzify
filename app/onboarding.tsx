@@ -12,7 +12,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Button } from '@/components/ui/button';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { markOnboardingSeen } from '@/lib/onboarding';
 
@@ -69,7 +78,14 @@ export default function OnboardingScreen() {
 
       <View style={styles.skipRow}>
         <Pressable onPress={finish} hitSlop={12}>
-          <ThemedText style={{ color: c.textMuted, fontSize: FontSize.sm }}>
+          <ThemedText
+            style={{
+              color: c.textMuted,
+              fontSize: FontSize.sm,
+              lineHeight: LineHeight.sm,
+              fontFamily: Fonts?.rounded,
+              fontWeight: FontWeight.semibold,
+            }}>
             Überspringen
           </ThemedText>
         </Pressable>
@@ -106,17 +122,14 @@ export default function OnboardingScreen() {
         ))}
       </View>
 
-      <Pressable
-        onPress={next}
-        style={({ pressed }) => [
-          styles.cta,
-          { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
-        ]}>
-        <ThemedText
-          style={{ color: c.accentFg, fontSize: FontSize.md, fontWeight: FontWeight.semibold }}>
-          {isLast ? 'Los geht\'s' : 'Weiter'}
-        </ThemedText>
-      </Pressable>
+      <View style={styles.ctaWrap}>
+        <Button
+          label={isLast ? 'Los geht\'s' : 'Weiter'}
+          onPress={next}
+          size="lg"
+          fullWidth
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -139,14 +152,18 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: FontSize.xxl,
-    fontWeight: FontWeight.bold,
+    lineHeight: LineHeight.xxl,
+    fontWeight: FontWeight.heavy,
+    fontFamily: Fonts?.rounded,
+    letterSpacing: LetterSpacing.heading,
     textAlign: 'center',
     marginBottom: Spacing.md,
   },
   body: {
     fontSize: FontSize.md,
+    lineHeight: LineHeight.md,
+    fontFamily: Fonts?.rounded,
     textAlign: 'center',
-    lineHeight: 24,
   },
   dots: {
     flexDirection: 'row',
@@ -156,11 +173,8 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.xl,
   },
   dot: { height: 8, borderRadius: 4 },
-  cta: {
+  ctaWrap: {
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    alignItems: 'center',
   },
 });

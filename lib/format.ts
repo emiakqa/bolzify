@@ -38,3 +38,28 @@ export function formatCountdown(iso: string, now: number = Date.now()): string {
 export function isBeforeKickoff(iso: string, now: number = Date.now()): boolean {
   return new Date(iso).getTime() > now;
 }
+
+// "gerade eben" / "vor 5 Min" / "vor 3 Std" / "gestern" / "12. Mai".
+// Für Liga-Ankündigungen: kurze, lesbare Relativzeit ohne externe lib.
+export function formatRelativeTime(iso: string, now: number = Date.now()): string {
+  const then = new Date(iso).getTime();
+  const diffSec = Math.floor((now - then) / 1000);
+
+  if (diffSec < 30) return 'gerade eben';
+  if (diffSec < 60) return `vor ${diffSec} Sek`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `vor ${diffMin} Min`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `vor ${diffHr} Std`;
+
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return 'gestern';
+  if (diffDay < 7) return `vor ${diffDay} Tagen`;
+
+  return new Date(iso).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: 'short',
+  });
+}

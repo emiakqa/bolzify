@@ -12,7 +12,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Button } from '@/components/ui/button';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Radius,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { getCurrentTournament } from '@/lib/current-tournament';
@@ -44,8 +54,7 @@ export default function CreateLeagueScreen() {
 
     setSubmitting(true);
 
-    // Liga ans aktuell aktive Turnier binden — gegen WM2022-Dev-Daten = WM2022,
-    // nach WM2026-Fixture-Import automatisch WM2026.
+    // Liga ans aktuell aktive Turnier binden (Resolver liest aus matches).
     const tournament = await getCurrentTournament();
 
     // Retry bei sehr unwahrscheinlichem Code-Kollisions-Fehler (unique constraint).
@@ -105,7 +114,15 @@ export default function CreateLeagueScreen() {
         style={{ flex: 1 }}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
-            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.md }}>Abbrechen</ThemedText>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+              }}>
+              Abbrechen
+            </ThemedText>
           </Pressable>
           <ThemedText style={[styles.title, { color: c.text }]}>Neue Liga</ThemedText>
           <View style={{ width: 72 }} />
@@ -118,30 +135,40 @@ export default function CreateLeagueScreen() {
             onChangeText={setName}
             placeholder="z. B. Kumpels-Kader"
             placeholderTextColor={c.textFaint}
-            style={[styles.input, { color: c.text, backgroundColor: c.surface, borderColor: c.border }]}
+            style={[
+              styles.input,
+              {
+                color: c.text,
+                backgroundColor: c.surface,
+                borderColor: name.trim().length >= 3 ? c.accentBorder : c.border,
+                fontFamily: Fonts?.rounded,
+              },
+            ]}
             maxLength={40}
             autoFocus
             returnKeyType="done"
             onSubmitEditing={onCreate}
           />
-          <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs, marginTop: Spacing.sm }}>
+          <ThemedText
+            style={{
+              color: c.textFaint,
+              fontSize: FontSize.xs,
+              lineHeight: LineHeight.xs,
+              fontFamily: Fonts?.rounded,
+              marginTop: Spacing.sm,
+            }}>
             Invite-Code wird automatisch generiert. Du kannst ihn danach teilen.
           </ThemedText>
 
-          <Pressable
+          <Button
+            label={submitting ? 'Erstelle…' : 'Liga erstellen'}
             onPress={onCreate}
             disabled={submitting || name.trim().length < 3}
-            style={({ pressed }) => [
-              styles.cta,
-              {
-                backgroundColor: c.accent,
-                opacity: submitting || name.trim().length < 3 ? 0.5 : pressed ? 0.85 : 1,
-              },
-            ]}>
-            <ThemedText style={{ color: c.accentFg, fontWeight: FontWeight.bold, fontSize: FontSize.md }}>
-              {submitting ? 'Erstelle…' : 'Liga erstellen'}
-            </ThemedText>
-          </Pressable>
+            loading={submitting}
+            size="lg"
+            fullWidth
+            style={{ marginTop: Spacing.xl }}
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -157,25 +184,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold },
+  title: {
+    fontSize: FontSize.lg,
+    lineHeight: LineHeight.lg,
+    fontWeight: FontWeight.heavy,
+    fontFamily: Fonts?.rounded,
+  },
   body: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, gap: Spacing.sm },
   label: {
     fontSize: FontSize.xs,
+    lineHeight: LineHeight.xs,
+    fontFamily: Fonts?.rounded,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: FontWeight.semibold,
+    letterSpacing: LetterSpacing.label,
+    fontWeight: FontWeight.bold,
   },
   input: {
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: FontSize.lg,
-  },
-  cta: {
-    marginTop: Spacing.xl,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
+    minHeight: 56,
   },
 });

@@ -13,7 +13,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Radius,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { pickAndUploadAvatar } from '@/lib/avatar';
@@ -84,9 +95,19 @@ export default function ProfileScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-            <ThemedText style={{ color: c.textMuted }}>← Zurück</ThemedText>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts?.rounded,
+                fontSize: FontSize.md,
+              }}>
+              ← Zurück
+            </ThemedText>
           </Pressable>
 
           <ThemedText style={[styles.h1, { color: c.text }]}>Profil</ThemedText>
@@ -98,9 +119,10 @@ export default function ProfileScreen() {
               style={({ pressed }) => [
                 styles.avatarWrap,
                 {
-                  borderColor: c.border,
+                  borderColor: c.accentBorder,
                   backgroundColor: c.surface,
                   opacity: pressed || uploading ? 0.7 : 1,
+                  transform: [{ scale: pressed ? 0.97 : 1 }],
                 },
               ]}>
               {profile?.avatar_url ? (
@@ -118,6 +140,8 @@ export default function ProfileScreen() {
               style={{
                 color: c.accent,
                 fontSize: FontSize.sm,
+                lineHeight: LineHeight.sm,
+                fontFamily: Fonts?.rounded,
                 fontWeight: FontWeight.semibold,
               }}>
               {uploading ? 'Lade hoch…' : profile?.avatar_url ? 'Foto ändern' : 'Foto hinzufügen'}
@@ -135,40 +159,44 @@ export default function ProfileScreen() {
             placeholderTextColor={c.textFaint}
             style={[
               styles.input,
-              { backgroundColor: c.surface, borderColor: c.border, color: c.text },
+              {
+                backgroundColor: c.surface,
+                borderColor: dirty ? c.accentBorder : c.border,
+                color: c.text,
+                fontFamily: Fonts?.rounded,
+              },
             ]}
           />
 
           <ThemedText style={[styles.label, { color: c.textFaint }]}>E-Mail</ThemedText>
-          <View style={[styles.readonly, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <ThemedText style={{ color: c.textMuted, fontSize: FontSize.md }}>
+          <Card padding="md" variant="flat" style={{ backgroundColor: c.surface }}>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
+              }}>
               {user?.email ?? '—'}
             </ThemedText>
-          </View>
+          </Card>
 
           {error ? (
             <ThemedText style={[styles.error, { color: c.danger }]}>{error}</ThemedText>
           ) : null}
 
-          <Pressable
+          <Button
+            label={saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Speichern'}
             onPress={save}
             disabled={saving || !dirty}
-            style={({ pressed }) => [
-              styles.cta,
-              {
-                backgroundColor: saved ? c.success : dirty ? c.accent : c.surfaceElevated,
-                opacity: pressed || saving ? 0.7 : 1,
-              },
-            ]}>
-            <ThemedText
-              style={{
-                color: dirty || saved ? c.accentFg : c.textFaint,
-                fontSize: FontSize.md,
-                fontWeight: FontWeight.semibold,
-              }}>
-              {saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Speichern'}
-            </ThemedText>
-          </Pressable>
+            loading={saving}
+            size="lg"
+            fullWidth
+            style={{
+              marginTop: Spacing.xl,
+              ...(saved ? { backgroundColor: c.success } : {}),
+            }}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -176,9 +204,16 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo },
   back: { marginBottom: Spacing.md },
-  h1: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, marginBottom: Spacing.xl },
+  h1: {
+    fontSize: FontSize.xxl,
+    lineHeight: LineHeight.xxl,
+    fontWeight: FontWeight.heavy,
+    fontFamily: Fonts?.rounded,
+    letterSpacing: LetterSpacing.heading,
+    marginBottom: Spacing.xl,
+  },
   avatarBlock: { alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xl },
   avatarWrap: {
     width: 120,
@@ -192,28 +227,25 @@ const styles = StyleSheet.create({
   avatarImg: { width: '100%', height: '100%' },
   label: {
     fontSize: FontSize.xs,
+    lineHeight: LineHeight.xs,
+    fontFamily: Fonts?.rounded,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: FontWeight.semibold,
+    letterSpacing: LetterSpacing.label,
+    fontWeight: FontWeight.bold,
     marginBottom: Spacing.xs,
     marginTop: Spacing.md,
   },
   input: {
     borderWidth: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     padding: Spacing.md,
     fontSize: FontSize.md,
+    minHeight: 52,
   },
-  readonly: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-  },
-  error: { fontSize: FontSize.sm, marginTop: Spacing.md },
-  cta: {
-    marginTop: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    alignItems: 'center',
+  error: {
+    fontSize: FontSize.sm,
+    lineHeight: LineHeight.sm,
+    fontFamily: Fonts?.rounded,
+    marginTop: Spacing.md,
   },
 });

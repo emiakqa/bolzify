@@ -14,8 +14,7 @@
 // Ein API-Call insgesamt — kein Rate-Limit-Problem.
 //
 // Usage:
-//   node scripts/import-top-scorers.mjs              # default WM2022
-//   node scripts/import-top-scorers.mjs WM2022
+//   node scripts/import-top-scorers.mjs              # default WM2026
 //   node scripts/import-top-scorers.mjs WM2026
 
 import { readFileSync } from 'node:fs';
@@ -43,11 +42,10 @@ if (!API_KEY) throw new Error('API_FOOTBALL_KEY fehlt');
 if (!SUPABASE_URL) throw new Error('EXPO_PUBLIC_SUPABASE_URL fehlt');
 if (!SUPABASE_SERVICE_ROLE) throw new Error('SUPABASE_SERVICE_ROLE_KEY fehlt');
 
-const TOURNAMENT = process.argv[2] ?? 'WM2022';
+const TOURNAMENT = process.argv[2] ?? 'WM2026';
 
 // Tournament → api-football Season-Jahr
 const SEASON_MAP = {
-  WM2022: 2022,
   WM2026: 2026,
 };
 const SEASON = SEASON_MAP[TOURNAMENT];

@@ -1,15 +1,13 @@
 // Resolvt dynamisch das "aktive" Turnier aus der DB.
 //
 // Warum nicht hardcoded 'WM2026'?
-//   - In der Entwicklung liegt nur WM2022 in der DB → Sondertipps-Screen
-//     fand 0 Teams und war unbenutzbar.
-//   - Nach Launch importieren wir WM2026-Fixtures → der Resolver schaltet
-//     automatisch um, ohne Code-Änderung.
+//   - Nach WM2026 ist vor EM2028 — sobald neue Fixtures importiert werden,
+//     soll die App ohne Code-Änderung umschalten.
 //
 // Reihenfolge:
 //   1) Turnier des NÄCHSTEN geplanten Matches (laufend/bevorstehend)
 //   2) Turnier des ZULETZT beendeten Matches (zwischen Turnieren)
-//   3) Turnier des allerersten Matches in der DB (Dev-Zustand)
+//   3) Turnier des allerersten Matches in der DB
 //   4) 'WM2026' als Hard-Fallback (leere DB)
 //
 // Ergebnis wird 60s gecached — reicht für UI-Nutzung, verhindert Queries

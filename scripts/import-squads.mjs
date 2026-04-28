@@ -1,22 +1,21 @@
 // Bolzify — Kader aller Teams aus api-football.com importieren
 //
 // Voraussetzung: teams-Tabelle ist gefüllt (via scripts/import-fixtures.mjs).
-// Ein API-Call pro Team (=~32 für eine WM), 100/Tag im Free-Plan.
+// Ein API-Call pro Team (=~48 für die WM2026), 100/Tag im Free-Plan.
 //
 // Rate-Limit Free-Plan: 10 req/min. Wir halten 6.5s Abstand + 429-Retry
 // mit 65s Backoff. Script ist idempotent — bereits importierte Teams
 // werden übersprungen, bei Re-Run zählen nur neue API-Calls.
 //
 // Usage:
-//   node scripts/import-squads.mjs                                 # alle Teams
-//   node scripts/import-squads.mjs WM2022                          # nur Teams dieses Turniers
-//   node scripts/import-squads.mjs WM2022 --only Qatar,Ecuador     # nur genannte Teams (Substring, case-insensitive)
-//   node scripts/import-squads.mjs WM2022 --force                  # auch bereits importierte refreshen
+//   node scripts/import-squads.mjs                                       # alle Teams
+//   node scripts/import-squads.mjs WM2026                                # nur Teams dieses Turniers
+//   node scripts/import-squads.mjs WM2026 --only Germany,France          # nur genannte Teams (Substring, case-insensitive)
+//   node scripts/import-squads.mjs WM2026 --force                        # auch bereits importierte refreshen
 //
 // Hinweise:
-// - /players/squads liefert den AKTUELLEN Kader, nicht historisch. Für Dev
-//   (WM2022) bedeutet das: Kader-Stand 2026, nicht Katar — für Flow-Testing ok.
-// - Für echte WM 2026 ~2 Wochen vor Start laufen lassen, wenn Kader offiziell.
+// - /players/squads liefert den AKTUELLEN Kader, nicht historisch.
+// - ~2 Wochen vor WM-Start laufen lassen, wenn die Kader offiziell sind.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

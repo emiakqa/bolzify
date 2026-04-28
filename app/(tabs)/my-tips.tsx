@@ -2,7 +2,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   SectionList,
   StyleSheet,
@@ -11,10 +10,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
+import { getCurrentTournament } from '@/lib/current-tournament';
 import { formatKickoffDate, formatKickoffTime } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
@@ -59,14 +70,19 @@ export default function MyTipsScreen() {
       return;
     }
 
-    // Sondertipp-Summe über alle Turniere parallel zur tips-Query holen
-    // — billig (max 1-2 Rows pro User) und unabhängig vom restlichen Flow.
+    // Aktuelles Turnier resolven — wir zeigen nur Tipps des laufenden Turniers.
+    const tournament = await getCurrentTournament();
+
+    // Sondertipp-Summe nur für das aktive Turnier — sonst würden Sondertipps
+    // aus alten Turnieren in die Header-Punktzahl wandern.
     const specialPromise = supabase
       .from('scored_special_tips')
       .select('total_points')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('tournament', tournament);
 
-    // Alle eigenen Tipps + per IN-Filter Matches + scored_tips + Spielernamen.
+    // Alle eigenen Tipps holen — gefiltert wird gleich serverseitig per
+    // Match-Tournament (Matches dieses Turniers IN tipIds).
     const { data: tipRows } = await supabase
       .from('tips')
       .select('match_id, home_goals, away_goals, first_scorer_id')
@@ -94,6 +110,7 @@ export default function MyTipsScreen() {
       supabase
         .from('matches')
         .select('id, kickoff_at, home_team, away_team, status, home_goals, away_goals')
+        .eq('tournament', tournament)
         .in('id', matchIds),
       supabase
         .from('scored_tips')
@@ -186,18 +203,7 @@ export default function MyTipsScreen() {
           <View>
             <View style={styles.headerRow}>
               <ThemedText style={[styles.h1, { color: c.text }]}>Meine Tipps</ThemedText>
-              {totalPoints > 0 ? (
-                <View style={[styles.totalBadge, { borderColor: c.accent }]}>
-                  <ThemedText
-                    style={{
-                      color: c.accent,
-                      fontSize: FontSize.sm,
-                      fontWeight: FontWeight.bold,
-                    }}>
-                    {totalPoints} Pkt
-                  </ThemedText>
-                </View>
-              ) : null}
+              {totalPoints > 0 ? <Badge label={`${totalPoints} Pkt`} tone="accent" /> : null}
             </View>
             {/* Aufschlüsselung nur zeigen wenn beide Quellen Punkte beigesteuert
                 haben — sonst ist die Summe = Match-Punkte und der Subtitle
@@ -206,8 +212,10 @@ export default function MyTipsScreen() {
               <ThemedText
                 style={{
                   color: c.textMuted,
-                  fontSize: FontSize.xs,
-                  marginTop: -Spacing.md + 2,
+                  fontSize: FontSize.sm,
+                  lineHeight: LineHeight.sm,
+                  fontFamily: Fonts?.rounded,
+                  marginTop: -Spacing.sm,
                   marginBottom: Spacing.lg,
                 }}>
                 {matchPoints} aus Spielen · {specialPoints} aus Sondertipps
@@ -216,52 +224,58 @@ export default function MyTipsScreen() {
           </View>
         }
         ListEmptyComponent={
-          <View style={[styles.empty, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
+          <Card padding="xl" style={styles.emptyCard}>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                textAlign: 'center',
+                fontFamily: Fonts?.rounded,
+              }}>
               Du hast noch keinen Tipp abgegeben.
             </ThemedText>
-            <Pressable
+            <Button
+              label="Zum Spielplan"
               onPress={() => router.push('/(tabs)/matches')}
-              style={({ pressed }) => [
-                styles.emptyCta,
-                { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
-              ]}>
-              <ThemedText
-                style={{
-                  color: c.accentFg,
-                  fontSize: FontSize.md,
-                  fontWeight: FontWeight.semibold,
-                }}>
-                Zum Spielplan
-              </ThemedText>
-            </Pressable>
-          </View>
+              style={{ alignSelf: 'center' }}
+            />
+          </Card>
         }
         renderSectionHeader={({ section }) => (
           <View style={[styles.sectionHeader, { backgroundColor: c.bg }]}>
-            <ThemedText style={[styles.sectionHeaderText, { color: c.nostalgia }]}>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontSize: FontSize.xs,
+                fontWeight: FontWeight.bold,
+                fontFamily: Fonts?.rounded,
+                textTransform: 'uppercase',
+                letterSpacing: LetterSpacing.label,
+              }}>
               {section.title}
             </ThemedText>
           </View>
         )}
         renderItem={({ item }) => (
-          <Pressable
+          <Card
+            padding="md"
+            style={styles.cardSpacing}
             onPress={() =>
               router.push({
                 pathname: '/tip/[matchId]',
                 params: { matchId: String(item.matchId) },
               })
-            }
-            style={({ pressed }) => [
-              styles.row,
-              {
-                backgroundColor: c.surface,
-                borderColor: c.border,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}>
+            }>
             <View style={styles.rowHeader}>
-              <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs }}>
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.xs,
+                  lineHeight: LineHeight.xs,
+                  fontFamily: Fonts?.rounded,
+                  fontWeight: FontWeight.medium,
+                }}>
                 {formatKickoffDate(item.kickoff_at)} · {formatKickoffTime(item.kickoff_at)}
               </ThemedText>
               {item.points !== null ? (
@@ -269,12 +283,21 @@ export default function MyTipsScreen() {
                   style={{
                     color: item.points > 0 ? c.accent : c.textFaint,
                     fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
                     fontWeight: FontWeight.bold,
                   }}>
                   +{item.points} Pkt
                 </ThemedText>
               ) : item.is_finished ? (
-                <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>—</ThemedText>
+                <ThemedText
+                  style={{
+                    color: c.textFaint,
+                    fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                  }}>
+                  —
+                </ThemedText>
               ) : null}
             </View>
 
@@ -282,26 +305,31 @@ export default function MyTipsScreen() {
               <ThemedText style={[styles.team, { color: c.text }]} numberOfLines={1}>
                 {deName(item.home_team)}
               </ThemedText>
-              <ThemedText style={{ color: c.textFaint, fontSize: FontSize.sm }}>vs</ThemedText>
+              <ThemedText
+                style={{
+                  color: c.textFaint,
+                  fontSize: FontSize.sm,
+                  lineHeight: LineHeight.sm,
+                  fontFamily: Fonts?.rounded,
+                }}>
+                vs
+              </ThemedText>
               <ThemedText style={[styles.team, { color: c.text }]} numberOfLines={1}>
                 {deName(item.away_team)}
               </ThemedText>
             </View>
 
             <View style={styles.rowFooter}>
-              <View style={[styles.tipPill, { borderColor: c.accent }]}>
-                <ThemedText
-                  style={{
-                    color: c.accent,
-                    fontSize: FontSize.xs,
-                    fontWeight: FontWeight.semibold,
-                  }}>
-                  Tipp {item.tip_home}:{item.tip_away}
-                </ThemedText>
-              </View>
+              <Badge label={`Tipp ${item.tip_home}:${item.tip_away}`} tone="accent" />
               {item.scorer_name ? (
                 <ThemedText
-                  style={{ color: c.textMuted, fontSize: FontSize.xs, flex: 1 }}
+                  style={{
+                    color: c.textMuted,
+                    fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
+                    flex: 1,
+                  }}
                   numberOfLines={1}>
                   ⚽ {item.scorer_name}
                 </ThemedText>
@@ -313,13 +341,15 @@ export default function MyTipsScreen() {
                   style={{
                     color: c.text,
                     fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
                     fontWeight: FontWeight.semibold,
                   }}>
                   Endstand {item.home_goals}:{item.away_goals}
                 </ThemedText>
               ) : null}
             </View>
-          </Pressable>
+          </Card>
         )}
         stickySectionHeadersEnabled
       />
@@ -329,50 +359,33 @@ export default function MyTipsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.lg,
+    gap: Spacing.md,
   },
   h1: {
     fontSize: FontSize.xxl,
-    fontWeight: FontWeight.bold,
+    lineHeight: LineHeight.xxl,
+    fontWeight: FontWeight.heavy,
+    fontFamily: Fonts?.rounded,
+    letterSpacing: LetterSpacing.heading,
+    flex: 1,
   },
-  totalBadge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-  },
-  empty: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    padding: Spacing.xl,
+  emptyCard: {
     alignItems: 'center',
-    gap: Spacing.lg,
-  },
-  emptyCta: {
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.md,
+    gap: Spacing.md,
   },
   sectionHeader: {
     paddingVertical: Spacing.sm,
-    marginTop: Spacing.md,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.xs,
   },
-  sectionHeaderText: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  row: {
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    padding: Spacing.md,
+  cardSpacing: {
     marginBottom: Spacing.sm,
     gap: Spacing.xs,
   },
@@ -385,9 +398,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   team: {
     fontSize: FontSize.md,
+    lineHeight: LineHeight.md,
+    fontFamily: Fonts?.rounded,
     fontWeight: FontWeight.semibold,
     flexShrink: 1,
   },
@@ -395,12 +411,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginTop: 4,
-  },
-  tipPill: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
+    marginTop: Spacing.sm,
   },
 });

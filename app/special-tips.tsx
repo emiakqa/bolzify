@@ -12,11 +12,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PickerGroup, PickerPlayer, PlayerPicker } from '@/components/player-picker';
 import { PickerTeam, TeamPicker } from '@/components/team-picker';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Radius,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
 import { getCurrentTournament } from '@/lib/current-tournament';
+import { Group, getTournamentGroups } from '@/lib/groups';
 import { supabase } from '@/lib/supabase';
 
 type Slot =
@@ -24,7 +36,9 @@ type Slot =
   | 'runner_up'
   | 'semifinalist_a'
   | 'semifinalist_b'
-  | 'top_scorer';
+  | 'top_scorer'
+  // 'group:A' .. 'group:L' — dynamisch, daher als template-literal type.
+  | `group:${string}`;
 
 type TeamSlot = Exclude<Slot, 'top_scorer'>;
 
@@ -58,9 +72,10 @@ export default function SpecialTipsScreen() {
 
   const [teams, setTeams] = useState<PickerTeam[]>([]);
   const [playerGroups, setPlayerGroups] = useState<PickerGroup[]>([]);
-  // Aktives Turnier wird zur Laufzeit resolvt (nicht hardcoded), damit die
-  // Screen gegen WM2022-Dev-Daten funktioniert und nach dem WM2026-Import
-  // automatisch umschaltet.
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [groupPicks, setGroupPicks] = useState<Record<string, PickerTeam | null>>({});
+  // Aktives Turnier wird zur Laufzeit resolvt (nicht hardcoded), damit der
+  // Screen sich automatisch auf zukünftige Turniere umstellt.
   const [tournament, setTournament] = useState<string | null>(null);
 
   const [state, setState] = useState<State>({
@@ -97,6 +112,26 @@ export default function SpecialTipsScreen() {
         .eq('tournament', t);
       const pickerTeams: PickerTeam[] = teamRows ?? [];
       setTeams(pickerTeams);
+
+      // Gruppen ableiten + bestehende Gruppensieger-Tipps laden
+      const grps = await getTournamentGroups(t);
+      setGroups(grps);
+
+      const initialGroupPicks: Record<string, PickerTeam | null> = {};
+      for (const g of grps) initialGroupPicks[g.letter] = null;
+
+      if (grps.length > 0) {
+        const teamById = new Map(pickerTeams.map((tm) => [tm.id, tm]));
+        const { data: gwTips } = await supabase
+          .from('group_winner_tips')
+          .select('group_letter, team_id')
+          .eq('user_id', user.id)
+          .eq('tournament', t);
+        for (const row of gwTips ?? []) {
+          initialGroupPicks[row.group_letter] = teamById.get(row.team_id) ?? null;
+        }
+      }
+      setGroupPicks(initialGroupPicks);
 
       // Bestehenden Tipp laden
       const { data: tip } = await supabase
@@ -184,10 +219,16 @@ export default function SpecialTipsScreen() {
     setSaved(false);
   };
 
+  const setGroupPick = (letter: string, team: PickerTeam | null) => {
+    setGroupPicks((p) => ({ ...p, [letter]: team }));
+    setSaved(false);
+  };
+
   const submit = async () => {
     if (!user || !tournament) return;
     setError(null);
     setSaving(true);
+
     const { error: err } = await supabase.from('special_tips').upsert(
       {
         user_id: user.id,
@@ -201,11 +242,52 @@ export default function SpecialTipsScreen() {
       },
       { onConflict: 'user_id,tournament' },
     );
-    setSaving(false);
+
     if (err) {
+      setSaving(false);
       setError(err.message);
       return;
     }
+
+    // Gruppensieger-Tipps: leere Slots löschen, gefüllte upserten.
+    // Wir machen es in zwei separaten Statements statt einem Diff, weil
+    // das simpler ist und Postgres das problemlos abkann.
+    const filledLetters = Object.keys(groupPicks).filter((l) => groupPicks[l]);
+    const emptyLetters = Object.keys(groupPicks).filter((l) => !groupPicks[l]);
+
+    if (emptyLetters.length > 0) {
+      const { error: delErr } = await supabase
+        .from('group_winner_tips')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('tournament', tournament)
+        .in('group_letter', emptyLetters);
+      if (delErr) {
+        setSaving(false);
+        setError(delErr.message);
+        return;
+      }
+    }
+
+    if (filledLetters.length > 0) {
+      const rows = filledLetters.map((letter) => ({
+        user_id: user.id,
+        tournament,
+        group_letter: letter,
+        team_id: groupPicks[letter]!.id,
+        updated_at: new Date().toISOString(),
+      }));
+      const { error: upErr } = await supabase
+        .from('group_winner_tips')
+        .upsert(rows, { onConflict: 'user_id,tournament,group_letter' });
+      if (upErr) {
+        setSaving(false);
+        setError(upErr.message);
+        return;
+      }
+    }
+
+    setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
@@ -237,50 +319,71 @@ export default function SpecialTipsScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-          <ThemedText style={{ color: c.textMuted }}>← Zurück</ThemedText>
+          <ThemedText
+            style={{ color: c.textMuted, fontFamily: Fonts?.rounded, fontSize: FontSize.md }}>
+            ← Zurück
+          </ThemedText>
         </Pressable>
 
         <ThemedText style={[styles.h1, { color: c.text }]}>Sondertipps</ThemedText>
         <ThemedText style={[styles.intro, { color: c.textMuted }]}>
           Einmalig vor dem Turnier tippen — Weltmeister, Finalgegner, die zwei anderen
-          Halbfinalisten und den Torschützenkönig.
+          Halbfinalisten, den Torschützenkönig und alle Gruppensieger.
         </ThemedText>
 
         {deadlineText ? (
-          <View
-            style={[
-              styles.deadlineBox,
-              {
-                backgroundColor: locked ? c.surface : c.surfaceElevated,
-                borderColor: locked ? c.danger : c.border,
-              },
-            ]}>
-            <ThemedText style={{ color: locked ? c.danger : c.textMuted, fontSize: FontSize.xs }}>
+          <Card
+            variant={locked ? 'default' : 'accent'}
+            padding="md"
+            style={{
+              ...styles.deadlineBox,
+              ...(locked ? { borderColor: c.danger } : {}),
+            }}>
+            <ThemedText
+              style={{
+                color: locked ? c.danger : c.accent,
+                fontSize: FontSize.xs,
+                lineHeight: LineHeight.xs,
+                fontFamily: Fonts?.rounded,
+                fontWeight: FontWeight.bold,
+                textTransform: 'uppercase',
+                letterSpacing: LetterSpacing.label,
+              }}>
               {locked ? 'Abgabe geschlossen seit' : 'Abgabe möglich bis'}
             </ThemedText>
             <ThemedText
               style={{
                 color: locked ? c.danger : c.text,
-                fontSize: FontSize.sm,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                fontFamily: Fonts?.rounded,
                 fontWeight: FontWeight.semibold,
+                marginTop: 2,
               }}>
               {deadlineText}
             </ThemedText>
-          </View>
+          </Card>
         ) : null}
 
         {teams.length === 0 ? (
-          <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-            <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
+          <Card padding="lg" style={styles.emptyCard}>
+            <ThemedText
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts?.rounded,
+                fontSize: FontSize.md,
+                lineHeight: LineHeight.md,
+                textAlign: 'center',
+              }}>
               Noch keine Teams in der DB.{'\n'}Auslosung der WM 2026 abwarten & Fixtures
               importieren.
             </ThemedText>
-          </View>
+          </Card>
         ) : (
           <>
-            <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>Teams</ThemedText>
+            <ThemedText style={[styles.sectionLabel, { color: c.textMuted }]}>Teams</ThemedText>
             {SLOT_CONFIG.map((slot) => {
               const picked = state[slot.key];
               // Andere bereits belegte Team-IDs → dieser Slot darf sie nicht wählen.
@@ -288,7 +391,13 @@ export default function SpecialTipsScreen() {
               return (
                 <View key={slot.key} style={styles.slotWrap}>
                   <ThemedText
-                    style={{ color: c.textMuted, fontSize: FontSize.xs, marginBottom: 4 }}>
+                    style={{
+                      color: c.textMuted,
+                      fontSize: FontSize.xs,
+                      lineHeight: LineHeight.xs,
+                      fontFamily: Fonts?.rounded,
+                      marginBottom: 6,
+                    }}>
                     {slot.hint}
                   </ThemedText>
                   <Pressable
@@ -298,8 +407,9 @@ export default function SpecialTipsScreen() {
                       styles.slotField,
                       {
                         backgroundColor: c.surface,
-                        borderColor: picked ? c.accent : c.border,
-                        opacity: pressed ? 0.8 : locked ? 0.6 : 1,
+                        borderColor: picked ? c.accentBorder : c.border,
+                        opacity: pressed ? 0.85 : locked ? 0.6 : 1,
+                        transform: [{ scale: pressed && !locked ? 0.99 : 1 }],
                       },
                     ]}>
                     <View style={{ flex: 1 }}>
@@ -307,8 +417,11 @@ export default function SpecialTipsScreen() {
                         style={{
                           color: c.textFaint,
                           fontSize: FontSize.xs,
+                          lineHeight: LineHeight.xs,
+                          fontFamily: Fonts?.rounded,
+                          fontWeight: FontWeight.bold,
                           textTransform: 'uppercase',
-                          letterSpacing: 1,
+                          letterSpacing: LetterSpacing.label,
                         }}>
                         {slot.label}
                       </ThemedText>
@@ -316,13 +429,23 @@ export default function SpecialTipsScreen() {
                         style={{
                           color: picked ? c.text : c.textFaint,
                           fontSize: FontSize.md,
+                          lineHeight: LineHeight.md,
+                          fontFamily: Fonts?.rounded,
                           fontWeight: FontWeight.semibold,
                           marginTop: 2,
                         }}>
                         {picked ? deName(picked.name) : 'Team auswählen…'}
                       </ThemedText>
                     </View>
-                    <ThemedText style={{ color: c.textMuted, fontSize: FontSize.lg }}>›</ThemedText>
+                    <ThemedText
+                      style={{
+                        color: c.textMuted,
+                        fontSize: FontSize.lg,
+                        lineHeight: LineHeight.lg,
+                        fontFamily: Fonts?.rounded,
+                      }}>
+                      ›
+                    </ThemedText>
                   </Pressable>
                   {openPicker === slot.key ? (
                     <TeamPicker
@@ -339,12 +462,18 @@ export default function SpecialTipsScreen() {
               );
             })}
 
-            <ThemedText style={[styles.sectionLabel, { color: c.textFaint }]}>
+            <ThemedText style={[styles.sectionLabel, { color: c.textMuted }]}>
               Torschützenkönig
             </ThemedText>
             <View style={styles.slotWrap}>
               <ThemedText
-                style={{ color: c.textMuted, fontSize: FontSize.xs, marginBottom: 4 }}>
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.xs,
+                  lineHeight: LineHeight.xs,
+                  fontFamily: Fonts?.rounded,
+                  marginBottom: 6,
+                }}>
                 Wer wird Top-Torschütze des Turniers?
               </ThemedText>
               <Pressable
@@ -354,8 +483,11 @@ export default function SpecialTipsScreen() {
                   styles.slotField,
                   {
                     backgroundColor: c.surface,
-                    borderColor: state.top_scorer ? c.accent : c.border,
-                    opacity: pressed ? 0.8 : locked || playerGroups.length === 0 ? 0.6 : 1,
+                    borderColor: state.top_scorer ? c.accentBorder : c.border,
+                    opacity: pressed ? 0.85 : locked || playerGroups.length === 0 ? 0.6 : 1,
+                    transform: [
+                      { scale: pressed && !locked && playerGroups.length > 0 ? 0.99 : 1 },
+                    ],
                   },
                 ]}>
                 <View style={{ flex: 1 }}>
@@ -363,8 +495,11 @@ export default function SpecialTipsScreen() {
                     style={{
                       color: c.textFaint,
                       fontSize: FontSize.xs,
+                      lineHeight: LineHeight.xs,
+                      fontFamily: Fonts?.rounded,
+                      fontWeight: FontWeight.bold,
                       textTransform: 'uppercase',
-                      letterSpacing: 1,
+                      letterSpacing: LetterSpacing.label,
                     }}>
                     Top-Scorer
                   </ThemedText>
@@ -372,6 +507,8 @@ export default function SpecialTipsScreen() {
                     style={{
                       color: state.top_scorer ? c.text : c.textFaint,
                       fontSize: FontSize.md,
+                      lineHeight: LineHeight.md,
+                      fontFamily: Fonts?.rounded,
                       fontWeight: FontWeight.semibold,
                       marginTop: 2,
                     }}>
@@ -382,11 +519,25 @@ export default function SpecialTipsScreen() {
                       : 'Spieler auswählen…'}
                   </ThemedText>
                 </View>
-                <ThemedText style={{ color: c.textMuted, fontSize: FontSize.lg }}>›</ThemedText>
+                <ThemedText
+                  style={{
+                    color: c.textMuted,
+                    fontSize: FontSize.lg,
+                    lineHeight: LineHeight.lg,
+                    fontFamily: Fonts?.rounded,
+                  }}>
+                  ›
+                </ThemedText>
               </Pressable>
               {playerGroups.length === 0 ? (
                 <ThemedText
-                  style={{ color: c.textFaint, fontSize: FontSize.xs, marginTop: Spacing.xs }}>
+                  style={{
+                    color: c.textFaint,
+                    fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
+                    marginTop: Spacing.xs,
+                  }}>
                   Lauf `node scripts/import-squads.mjs` lokal, sobald die Kader offiziell sind.
                 </ThemedText>
               ) : null}
@@ -400,36 +551,120 @@ export default function SpecialTipsScreen() {
               selectedId={state.top_scorer?.id ?? null}
             />
 
+            <ThemedText style={[styles.sectionLabel, { color: c.textMuted }]}>
+              Gruppensieger
+            </ThemedText>
+            {groups.length === 0 ? (
+              <Card padding="md" style={styles.emptyCard}>
+                <ThemedText
+                  style={{
+                    color: c.textFaint,
+                    fontFamily: Fonts?.rounded,
+                    fontSize: FontSize.sm,
+                    lineHeight: LineHeight.sm,
+                    textAlign: 'center',
+                  }}>
+                  Gruppen erscheinen, sobald die Auslosung importiert ist.
+                </ThemedText>
+              </Card>
+            ) : (
+              groups.map((g) => {
+                const slotKey: Slot = `group:${g.letter}`;
+                const picked = groupPicks[g.letter];
+                return (
+                  <View key={g.letter} style={styles.slotWrap}>
+                    <Pressable
+                      onPress={() => !locked && setOpenPicker(slotKey)}
+                      disabled={locked}
+                      style={({ pressed }) => [
+                        styles.slotField,
+                        {
+                          backgroundColor: c.surface,
+                          borderColor: picked ? c.accentBorder : c.border,
+                          opacity: pressed ? 0.85 : locked ? 0.6 : 1,
+                          transform: [{ scale: pressed && !locked ? 0.99 : 1 }],
+                        },
+                      ]}>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText
+                          style={{
+                            color: c.textFaint,
+                            fontSize: FontSize.xs,
+                            lineHeight: LineHeight.xs,
+                            fontFamily: Fonts?.rounded,
+                            fontWeight: FontWeight.bold,
+                            textTransform: 'uppercase',
+                            letterSpacing: LetterSpacing.label,
+                          }}>
+                          Gruppe {g.letter}
+                        </ThemedText>
+                        <ThemedText
+                          style={{
+                            color: picked ? c.text : c.textFaint,
+                            fontSize: FontSize.md,
+                            lineHeight: LineHeight.md,
+                            fontFamily: Fonts?.rounded,
+                            fontWeight: FontWeight.semibold,
+                            marginTop: 2,
+                          }}>
+                          {picked ? deName(picked.name) : 'Sieger auswählen…'}
+                        </ThemedText>
+                      </View>
+                      <ThemedText
+                        style={{
+                          color: c.textMuted,
+                          fontSize: FontSize.lg,
+                          lineHeight: LineHeight.lg,
+                          fontFamily: Fonts?.rounded,
+                        }}>
+                        ›
+                      </ThemedText>
+                    </Pressable>
+                    {openPicker === slotKey ? (
+                      <TeamPicker
+                        visible
+                        title={`Gruppe ${g.letter} — Sieger`}
+                        teams={g.teams}
+                        selectedId={picked?.id ?? null}
+                        onClose={() => setOpenPicker(null)}
+                        onSelect={(t) => setGroupPick(g.letter, t)}
+                      />
+                    ) : null}
+                  </View>
+                );
+              })
+            )}
+
             {error ? (
               <ThemedText style={[styles.error, { color: c.danger }]}>{error}</ThemedText>
             ) : null}
 
             {!locked ? (
-              <Pressable
+              <Button
+                label={saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Sondertipps speichern'}
                 onPress={submit}
+                loading={saving}
                 disabled={saving}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  {
-                    backgroundColor: saved ? c.success : c.accent,
-                    opacity: pressed || saving ? 0.7 : 1,
-                  },
-                ]}>
+                size="lg"
+                fullWidth
+                style={{
+                  marginTop: Spacing.xl,
+                  backgroundColor: saved ? c.success : c.accent,
+                }}
+              />
+            ) : (
+              <Card padding="lg" style={styles.lockedBox}>
                 <ThemedText
                   style={{
-                    color: c.accentFg,
+                    color: c.textMuted,
                     fontSize: FontSize.md,
-                    fontWeight: FontWeight.semibold,
+                    lineHeight: LineHeight.md,
+                    fontFamily: Fonts?.rounded,
+                    textAlign: 'center',
                   }}>
-                  {saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Sondertipps speichern'}
-                </ThemedText>
-              </Pressable>
-            ) : (
-              <View style={[styles.lockedBox, { backgroundColor: c.surface, borderColor: c.border }]}>
-                <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
                   Die Abgabe-Frist ist vorbei. Änderungen sind nicht mehr möglich.
                 </ThemedText>
-              </View>
+              </Card>
             )}
           </>
         )}
@@ -443,20 +678,33 @@ const styles = StyleSheet.create({
   scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   back: { marginBottom: Spacing.md },
-  h1: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, marginBottom: Spacing.sm },
-  intro: { fontSize: FontSize.sm, marginBottom: Spacing.lg, lineHeight: 20 },
+  h1: {
+    fontSize: FontSize.xxl,
+    lineHeight: LineHeight.xxl,
+    fontWeight: FontWeight.bold,
+    fontFamily: Fonts?.rounded,
+    marginBottom: Spacing.sm,
+  },
+  intro: {
+    fontSize: FontSize.sm,
+    lineHeight: LineHeight.sm,
+    fontFamily: Fonts?.rounded,
+    marginBottom: Spacing.lg,
+  },
   deadlineBox: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
     marginBottom: Spacing.lg,
     gap: 2,
   },
+  emptyCard: {
+    alignItems: 'center',
+  },
   sectionLabel: {
     fontSize: FontSize.xs,
+    lineHeight: LineHeight.xs,
+    fontFamily: Fonts?.rounded,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: FontWeight.semibold,
+    letterSpacing: LetterSpacing.label,
+    fontWeight: FontWeight.bold,
     marginTop: Spacing.lg,
     marginBottom: Spacing.sm,
   },
@@ -464,29 +712,19 @@ const styles = StyleSheet.create({
   slotField: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     minHeight: 64,
   },
-  primaryBtn: {
-    marginTop: Spacing.xl,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.lg,
-    alignItems: 'center',
-  },
-  error: { marginTop: Spacing.sm, fontSize: FontSize.sm },
-  card: {
-    marginTop: Spacing.md,
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
+  error: {
+    marginTop: Spacing.sm,
+    fontSize: FontSize.sm,
+    lineHeight: LineHeight.sm,
+    fontFamily: Fonts?.rounded,
   },
   lockedBox: {
     marginTop: Spacing.xl,
-    padding: Spacing.lg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
   },
 });

@@ -13,7 +13,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PickerGroup, PickerPlayer, PlayerPicker } from '@/components/player-picker';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/design';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Fonts,
+  LetterSpacing,
+  LineHeight,
+  Radius,
+  Spacing,
+} from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
@@ -36,7 +48,7 @@ type Match = {
 };
 
 // Zeitsperre gilt nur für das produktive Turnier WM2026.
-// WM2022 & andere Dev-Turniere sind jederzeit tippbar.
+// Etwaige andere Test-Turniere sind jederzeit tippbar.
 const LIVE_TOURNAMENT = 'WM2026';
 
 const MAX_GOALS = 9;
@@ -173,10 +185,10 @@ export default function TipScreen() {
       <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.loadingWrap}>
-          <ThemedText style={{ color: c.textMuted }}>Match nicht gefunden.</ThemedText>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <ThemedText style={{ color: c.accent }}>Zurück</ThemedText>
-          </Pressable>
+          <ThemedText style={{ color: c.textMuted, fontFamily: Fonts?.rounded }}>
+            Match nicht gefunden.
+          </ThemedText>
+          <Button label="Zurück" variant="ghost" onPress={() => router.back()} />
         </View>
       </SafeAreaView>
     );
@@ -190,35 +202,44 @@ export default function TipScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.closeRow}>
-            <ThemedText style={{ color: c.textMuted }}>← Zurück</ThemedText>
+            <ThemedText
+              style={{ color: c.textMuted, fontFamily: Fonts?.rounded, fontSize: FontSize.md }}>
+              ← Zurück
+            </ThemedText>
           </Pressable>
 
-          <ThemedText style={[styles.stage, { color: c.nostalgia }]}>{match.stage ?? ''}</ThemedText>
+          {match.stage ? (
+            <View style={styles.stageWrap}>
+              <Badge label={match.stage} tone="neutral" />
+            </View>
+          ) : null}
           <ThemedText style={[styles.kickoff, { color: c.textMuted }]}>
             {formatKickoffDate(match.kickoff_at)} · {formatKickoffTime(match.kickoff_at)}
           </ThemedText>
 
-          <View style={styles.scoreBlock}>
-            <Stepper
-              label={deName(match.home_team)}
-              value={home}
-              onChange={setHome}
-              disabled={!tippable || saving}
-              c={c}
-            />
-            <ThemedText style={[styles.colon, { color: c.textFaint }]}>:</ThemedText>
-            <Stepper
-              label={deName(match.away_team)}
-              value={away}
-              onChange={setAway}
-              disabled={!tippable || saving}
-              c={c}
-            />
-          </View>
+          <Card padding="lg" style={styles.scoreCard}>
+            <View style={styles.scoreBlock}>
+              <Stepper
+                label={deName(match.home_team)}
+                value={home}
+                onChange={setHome}
+                disabled={!tippable || saving}
+                c={c}
+              />
+              <ThemedText style={[styles.colon, { color: c.textFaint }]}>:</ThemedText>
+              <Stepper
+                label={deName(match.away_team)}
+                value={away}
+                onChange={setAway}
+                disabled={!tippable || saving}
+                c={c}
+              />
+            </View>
+          </Card>
 
           {tippable ? (
             <>
-              <ThemedText style={[styles.label, { color: c.textFaint }]}>
+              <ThemedText style={[styles.label, { color: c.textMuted }]}>
                 Torschütze (optional, +3 Bonus)
               </ThemedText>
 
@@ -229,57 +250,95 @@ export default function TipScreen() {
                   styles.pickerField,
                   {
                     backgroundColor: c.surface,
-                    borderColor: scorer ? c.accent : c.border,
-                    opacity: pressed ? 0.8 : 1,
+                    borderColor: scorer ? c.accentBorder : c.border,
+                    opacity: pressed ? 0.85 : 1,
+                    transform: [{ scale: pressed ? 0.99 : 1 }],
                   },
                 ]}>
                 {scorer ? (
                   <View style={styles.pickerSelected}>
-                    <ThemedText style={{ color: c.text, fontSize: FontSize.md, fontWeight: FontWeight.semibold }}>
+                    <ThemedText
+                      style={{
+                        color: c.text,
+                        fontSize: FontSize.md,
+                        lineHeight: LineHeight.md,
+                        fontFamily: Fonts?.rounded,
+                        fontWeight: FontWeight.semibold,
+                      }}>
                       {scorer.name}
                     </ThemedText>
-                    <ThemedText style={{ color: c.textMuted, fontSize: FontSize.xs }}>
+                    <ThemedText
+                      style={{
+                        color: c.textMuted,
+                        fontSize: FontSize.xs,
+                        lineHeight: LineHeight.xs,
+                        fontFamily: Fonts?.rounded,
+                      }}>
                       {scorer.number ? `#${scorer.number}` : ''}
                       {scorer.number && scorer.position ? ' · ' : ''}
                       {scorer.position ?? ''}
                     </ThemedText>
                   </View>
                 ) : (
-                  <ThemedText style={{ color: c.textFaint, fontSize: FontSize.md }}>
+                  <ThemedText
+                    style={{
+                      color: c.textFaint,
+                      fontSize: FontSize.md,
+                      lineHeight: LineHeight.md,
+                      fontFamily: Fonts?.rounded,
+                    }}>
                     {squadsLoaded ? 'Spieler auswählen…' : 'Keine Kader in der DB'}
                   </ThemedText>
                 )}
-                <ThemedText style={{ color: c.textMuted, fontSize: FontSize.md }}>
-                  {scorer ? '›' : '›'}
+                <ThemedText
+                  style={{
+                    color: c.textMuted,
+                    fontSize: FontSize.lg,
+                    lineHeight: LineHeight.lg,
+                    fontFamily: Fonts?.rounded,
+                  }}>
+                  ›
                 </ThemedText>
               </Pressable>
 
               {!squadsLoaded ? (
-                <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs, marginTop: Spacing.xs }}>
+                <ThemedText
+                  style={{
+                    color: c.textFaint,
+                    fontSize: FontSize.xs,
+                    lineHeight: LineHeight.xs,
+                    fontFamily: Fonts?.rounded,
+                    marginTop: Spacing.xs,
+                  }}>
                   Kader nicht importiert. Lauf `node scripts/import-squads.mjs` lokal.
                 </ThemedText>
               ) : null}
 
               {error && <ThemedText style={[styles.error, { color: c.danger }]}>{error}</ThemedText>}
 
-              <Pressable
+              <Button
+                label={saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Tipp speichern'}
                 onPress={submit}
+                loading={saving}
                 disabled={saving}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  {
-                    backgroundColor: saved ? c.success : c.accent,
-                    opacity: pressed || saving ? 0.7 : 1,
-                  },
-                ]}>
-                <ThemedText style={{ color: c.accentFg, fontSize: FontSize.md, fontWeight: FontWeight.semibold }}>
-                  {saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Tipp speichern'}
-                </ThemedText>
-              </Pressable>
+                size="lg"
+                fullWidth
+                style={{
+                  marginTop: Spacing.xl,
+                  backgroundColor: saved ? c.success : c.accent,
+                }}
+              />
             </>
           ) : (
-            <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-              <ThemedText style={{ color: c.textMuted, textAlign: 'center' }}>
+            <Card padding="lg" style={styles.lockedCard}>
+              <ThemedText
+                style={{
+                  color: c.textMuted,
+                  fontSize: FontSize.md,
+                  lineHeight: LineHeight.md,
+                  fontFamily: Fonts?.rounded,
+                  textAlign: 'center',
+                }}>
                 Anpfiff vorbei — Tipp-Abgabe gesperrt.
               </ThemedText>
               {match.status === 'finished' &&
@@ -289,14 +348,17 @@ export default function TipScreen() {
                   style={{
                     color: c.text,
                     textAlign: 'center',
-                    fontSize: FontSize.lg,
-                    fontWeight: FontWeight.semibold,
+                    fontSize: FontSize.xl,
+                    lineHeight: LineHeight.xl,
+                    fontFamily: Fonts?.rounded,
+                    fontWeight: FontWeight.heavy,
+                    letterSpacing: LetterSpacing.heading,
                     marginTop: Spacing.sm,
                   }}>
                   Endstand: {match.home_goals} : {match.away_goals}
                 </ThemedText>
               ) : null}
-            </View>
+            </Card>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -339,9 +401,23 @@ function Stepper({
           disabled={disabled || value <= 0}
           style={({ pressed }) => [
             styles.stepBtn,
-            { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.6 : 1 },
+            {
+              backgroundColor: c.surfaceElevated,
+              borderColor: c.borderStrong,
+              opacity: pressed ? 0.6 : 1,
+              transform: [{ scale: pressed ? 0.94 : 1 }],
+            },
           ]}>
-          <ThemedText style={{ color: c.text, fontSize: FontSize.xl, fontWeight: FontWeight.semibold }}>−</ThemedText>
+          <ThemedText
+            style={{
+              color: c.text,
+              fontSize: FontSize.xl,
+              lineHeight: LineHeight.xl,
+              fontFamily: Fonts?.rounded,
+              fontWeight: FontWeight.bold,
+            }}>
+            −
+          </ThemedText>
         </Pressable>
         <ThemedText style={[styles.stepValue, { color: c.text }]}>{value}</ThemedText>
         <Pressable
@@ -349,9 +425,23 @@ function Stepper({
           disabled={disabled || value >= MAX_GOALS}
           style={({ pressed }) => [
             styles.stepBtn,
-            { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.6 : 1 },
+            {
+              backgroundColor: c.surfaceElevated,
+              borderColor: c.borderStrong,
+              opacity: pressed ? 0.6 : 1,
+              transform: [{ scale: pressed ? 0.94 : 1 }],
+            },
           ]}>
-          <ThemedText style={{ color: c.text, fontSize: FontSize.xl, fontWeight: FontWeight.semibold }}>＋</ThemedText>
+          <ThemedText
+            style={{
+              color: c.text,
+              fontSize: FontSize.xl,
+              lineHeight: LineHeight.xl,
+              fontFamily: Fonts?.rounded,
+              fontWeight: FontWeight.bold,
+            }}>
+            ＋
+          </ThemedText>
         </Pressable>
       </View>
     </View>
@@ -360,30 +450,36 @@ function Stepper({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl, gap: Spacing.md },
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo, gap: Spacing.md },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: Spacing.md },
   closeRow: { marginBottom: Spacing.sm },
-  stage: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    textAlign: 'center',
-    marginTop: Spacing.md,
+  stageWrap: {
+    alignItems: 'center',
+    marginTop: Spacing.sm,
   },
   kickoff: {
     fontSize: FontSize.sm,
+    lineHeight: LineHeight.sm,
+    fontFamily: Fonts?.rounded,
     textAlign: 'center',
+    marginTop: Spacing.sm,
     marginBottom: Spacing.lg,
+  },
+  scoreCard: {
+    marginBottom: Spacing.md,
   },
   scoreBlock: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    marginVertical: Spacing.lg,
   },
-  colon: { fontSize: FontSize.display, lineHeight: FontSize.display + 8, fontWeight: FontWeight.bold },
+  colon: {
+    fontSize: FontSize.display,
+    lineHeight: LineHeight.display,
+    fontFamily: Fonts?.rounded,
+    fontWeight: FontWeight.heavy,
+  },
   stepper: {
     flex: 1,
     alignItems: 'center',
@@ -391,6 +487,8 @@ const styles = StyleSheet.create({
   },
   stepperLabel: {
     fontSize: FontSize.md,
+    lineHeight: LineHeight.md,
+    fontFamily: Fonts?.rounded,
     fontWeight: FontWeight.semibold,
     textAlign: 'center',
     minHeight: 40,
@@ -403,49 +501,44 @@ const styles = StyleSheet.create({
   stepBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepValue: {
     fontSize: FontSize.display,
-    lineHeight: FontSize.display + 8,
-    fontWeight: FontWeight.bold,
+    lineHeight: LineHeight.display,
+    fontFamily: Fonts?.rounded,
+    fontWeight: FontWeight.heavy,
+    letterSpacing: LetterSpacing.display,
     minWidth: 36,
     textAlign: 'center',
     includeFontPadding: false,
   },
   label: {
     fontSize: FontSize.xs,
+    lineHeight: LineHeight.xs,
+    fontFamily: Fonts?.rounded,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: LetterSpacing.label,
     marginTop: Spacing.lg,
-    fontWeight: FontWeight.semibold,
+    fontWeight: FontWeight.bold,
   },
   pickerField: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
-    minHeight: 54,
+    minHeight: 56,
+    marginTop: Spacing.sm,
   },
   pickerSelected: { flex: 1, gap: 2 },
-  primaryBtn: {
+  error: { marginTop: Spacing.sm, fontSize: FontSize.sm, lineHeight: LineHeight.sm },
+  lockedCard: {
     marginTop: Spacing.xl,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.lg,
-    alignItems: 'center',
   },
-  error: { marginTop: Spacing.sm, fontSize: FontSize.sm },
-  card: {
-    marginTop: Spacing.xl,
-    padding: Spacing.lg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
-  backBtn: { marginTop: Spacing.md },
 });

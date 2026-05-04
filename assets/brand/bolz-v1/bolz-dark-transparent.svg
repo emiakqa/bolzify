@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 624 360" width="624" height="360" role="img" aria-label="Bolz.">
+  <defs>
+    
+  </defs>
+  
+  <text x="100" y="240" class="wm" fill="#ECF1F0">Bolz</text>
+  <circle cx="503" cy="211" r="17.2" fill="none" stroke="#22C55E" stroke-width="7.6"></circle>
+  <circle cx="503" cy="211" r="6" fill="#22C55E"></circle>
+</svg>

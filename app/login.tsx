@@ -330,67 +330,36 @@ export default function LoginScreen() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BrandMark — Wappen-Disc + Stern-Badge + Wortmarke + Untermarke
+// BrandMark — Pure Wortmarke "Bolzify" + Untermarke.
+// Bewusst minimalistisch (kein Disc, kein Logo-Mark) — typografisches Brand.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BrandMark({ c }: { c: (typeof Colors)['light'] }) {
   return (
-    <View style={{ alignItems: 'center', gap: 14 }}>
-      {/* Wappen-Disc 84×84, solid accent (Gradient kommt zurück, sobald
-          expo-linear-gradient installiert ist — visuell auf 84px kaum sichtbar). */}
-      <View style={styles.discWrap}>
-        <View style={[styles.disc, { backgroundColor: c.accent }, Shadow.md]}>
-          <Text
-            style={{
-              color: c.accentFg,
-              fontFamily: Fonts.display.heavy,
-              fontSize: 44,
-              letterSpacing: -2,
-              lineHeight: 48,
-              marginTop: -2,
-            }}>
-            B
-          </Text>
-        </View>
-        {/* Tor-Orange Stern-Badge unten rechts */}
-        <View style={[styles.starBadge, { backgroundColor: c.warm, borderColor: c.bg }]}>
-          <Text
-            style={{
-              color: c.warmFg,
-              fontFamily: Fonts.mono.bold,
-              fontSize: 11,
-              lineHeight: 13,
-            }}>
-            ★
-          </Text>
-        </View>
-      </View>
-
-      <View style={{ alignItems: 'center' }}>
+    <View style={{ alignItems: 'center' }}>
+      <Text
+        style={{
+          color: c.text,
+          fontFamily: Fonts.display.heavy,
+          fontSize: 44,
+          letterSpacing: -1.6,
+          lineHeight: 46,
+        }}>
+        Bolzify
+      </Text>
+      <View style={styles.subMark}>
+        <View style={[styles.subMarkLine, { backgroundColor: c.borderStrong }]} />
         <Text
           style={{
-            color: c.text,
-            fontFamily: Fonts.display.heavy,
-            fontSize: 44,
-            letterSpacing: -1.6,
-            lineHeight: 46,
+            color: c.textMuted,
+            fontFamily: Fonts.mono.bold,
+            fontSize: 10,
+            letterSpacing: 1.6,
+            textTransform: 'uppercase',
           }}>
-          Bolzify
+          Tipprunde · Saison 26
         </Text>
-        <View style={styles.subMark}>
-          <View style={[styles.subMarkLine, { backgroundColor: c.borderStrong }]} />
-          <Text
-            style={{
-              color: c.textMuted,
-              fontFamily: Fonts.mono.bold,
-              fontSize: 10,
-              letterSpacing: 1.6,
-              textTransform: 'uppercase',
-            }}>
-            Tipprunde · Saison 26
-          </Text>
-          <View style={[styles.subMarkLine, { backgroundColor: c.borderStrong }]} />
-        </View>
+        <View style={[styles.subMarkLine, { backgroundColor: c.borderStrong }]} />
       </View>
     </View>
   );
@@ -541,29 +510,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24, // SafeAreaView fügt Status-Bar-Inset hinzu
     paddingBottom: 32,
-  },
-  discWrap: {
-    width: 84,
-    height: 84,
-    position: 'relative',
-  },
-  disc: {
-    width: 84,
-    height: 84,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  starBadge: {
-    position: 'absolute',
-    bottom: -6,
-    right: -6,
-    width: 26,
-    height: 26,
-    borderRadius: 999,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   subMark: {
     flexDirection: 'row',

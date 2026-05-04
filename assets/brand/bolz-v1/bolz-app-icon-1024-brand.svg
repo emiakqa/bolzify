@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Bolz. App Icon">
+  <defs>
+    
+  </defs>
+  <rect width="1024" height="1024" rx="240.64" ry="240.64" fill="#15803D"></rect>
+  <text x="77.82399999999996" y="634.88" class="wm" fill="#F4F1EA">Bolz</text>
+  <circle cx="903.1680000000001" cy="575.488" r="35.2256" fill="none" stroke="#F4F1EA" stroke-width="15.5648"></circle>
+  <circle cx="903.1680000000001" cy="575.488" r="12.288" fill="#F4F1EA"></circle>
+</svg>

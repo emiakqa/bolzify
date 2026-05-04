@@ -9,17 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "primaryColor": "#22c55e",
-    "owner": "[EXPO_USERNAME]",
-    "extra": {
-      "eas": {
-        "projectId": "[EAS_PROJECT_ID]"
-      }
-    },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/[EAS_PROJECT_ID]"
+      "url": "https://u.expo.dev/90a38214-e5f6-42a4-9f88-d38e723f78a5"
     },
     "ios": {
       "bundleIdentifier": "de.bolzify.app",
@@ -44,7 +38,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.SCHEDULE_EXACT_ALARM"
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -85,6 +80,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "90a38214-e5f6-42a4-9f88-d38e723f78a5"
+      }
+    },
+    "owner": "emito"
   }
 }

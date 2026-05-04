@@ -186,6 +186,7 @@ export default function LoginScreen() {
                 editable={!busy}
                 maxLength={21}
                 returnKeyType="next"
+                testID="login-username-input"
               />
             ) : null}
 
@@ -201,6 +202,7 @@ export default function LoginScreen() {
               keyboardType="email-address"
               editable={!busy}
               returnKeyType="next"
+              testID="login-email-input"
             />
 
             <Field
@@ -215,6 +217,7 @@ export default function LoginScreen() {
               editable={!busy}
               returnKeyType="done"
               onSubmitEditing={submit}
+              testID="login-password-input"
             />
 
             {isSignup ? (
@@ -222,6 +225,7 @@ export default function LoginScreen() {
                 c={c}
                 checked={acceptTerms}
                 onToggle={() => setAcceptTerms((v) => !v)}
+                testID="login-terms-checkbox"
               />
             ) : (
               <Pressable
@@ -229,7 +233,8 @@ export default function LoginScreen() {
                   // Forgot-Password-Flow ist noch nicht implementiert.
                   setInfo('Passwort-Reset folgt — bitte Support anschreiben.');
                 }}
-                hitSlop={8}>
+                hitSlop={8}
+                testID="login-forgot-password">
                 <Text
                   style={{
                     textAlign: 'right',
@@ -279,6 +284,7 @@ export default function LoginScreen() {
               size="lg"
               fullWidth
               variant="primary"
+              testID="login-submit-button"
             />
           </View>
 
@@ -292,7 +298,7 @@ export default function LoginScreen() {
               }}>
               {isSignup ? 'Schon ein Konto?' : 'Noch kein Konto?'}
             </Text>
-            <Pressable onPress={switchMode} hitSlop={8}>
+            <Pressable onPress={switchMode} hitSlop={8} testID="login-switch-mode">
               <Text
                 style={{
                   color: c.accent,
@@ -473,15 +479,18 @@ function TermsCheckbox({
   c,
   checked,
   onToggle,
+  testID,
 }: {
   c: (typeof Colors)['light'];
   checked: boolean;
   onToggle: () => void;
+  testID?: string;
 }) {
   return (
     <Pressable
       onPress={onToggle}
       hitSlop={8}
+      testID={testID}
       style={({ pressed }) => [
         styles.termsRow,
         { opacity: pressed ? 0.7 : 1 },

@@ -1,0 +1,17 @@
+# Maestro Workspace-Config
+# Wird automatisch eingelesen wenn du `maestro test .maestro/` ausführst.
+#
+# Wir filtern Flows per Tag:
+#   maestro test --include-tags=smoke .maestro/      # nur Smoke-Suite (~30s)
+#   maestro test --include-tags=regression .maestro/ # voller Regression-Lauf
+#   maestro test .maestro/                           # alle Flows
+#
+# Flow-Tags werden im jeweiligen Flow-File deklariert (s. flows/*.yaml).
+
+flows:
+  - "flows/*.yaml"
+
+# Globale Execution-Order spielt für uns keine Rolle — jeder Flow ist
+# state-isoliert (alle starten mit `clearState: true`).
+executionOrder:
+  continueOnFailure: true

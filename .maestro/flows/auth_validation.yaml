@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Regression: Sign-Up-Validierung — testet die client-side Guards in login.tsx:
+#   - leere Felder
+#   - zu kurzes Passwort
+#   - ungültiger Username
+#   - AGB nicht akzeptiert (CTA disabled)
+#
+# Reines Read-Only — schreibt keinen DB-State.
+# Dauer: ~10s.
+# ─────────────────────────────────────────────────────────────────────────────
+appId: de.bolzify.app
+name: "Auth · Validation Guards"
+tags:
+  - regression
+  - auth
+---
+- launchApp:
+    clearState: true
+    permissions:
+      notifications: deny
+
+- extendedWaitUntil:
+    visible:
+      text: "Willkommen zurück."
+    timeout: 30000
+
+- tapOn:
+    id: "login-switch-mode"
+- assertVisible: "Konto anlegen."
+
+# 1) AGB-Checkbox unchecked → Submit-Button ist disabled
+#    (Maestro tappt zwar, aber der Pressable feuert nicht — wir prüfen,
+#    dass keine Error-Meldung erscheint, weil das Submit-Handler nie lief.)
+- tapOn:
+    id: "login-submit-button"
+- assertNotVisible:
+    text: "E-Mail und Passwort sind Pflicht."
+
+# 2) AGB akzeptieren — jetzt feuert der Submit
+- tapOn:
+    id: "login-terms-checkbox"
+- tapOn:
+    id: "login-submit-button"
+- assertVisible: "E-Mail und Passwort sind Pflicht."
+
+# 3) Zu kurzes Passwort
+- tapOn:
+    id: "login-email-input"
+- inputText: "test@bolzify.test"
+- tapOn:
+    id: "login-password-input"
+- inputText: "abc"
+- tapOn:
+    id: "login-submit-button"
+- assertVisible: "Passwort muss mindestens 8 Zeichen haben."
+
+# 4) Username-Format ungültig
+- tapOn:
+    id: "login-password-input"
+- eraseText: 50
+- inputText: "TestPass123!"
+- tapOn:
+    id: "login-username-input"
+- inputText: "x"  # zu kurz
+- tapOn:
+    id: "login-submit-button"
+- assertVisible: "Username: 3–20 Zeichen, nur Buchstaben, Zahlen, Unterstrich."

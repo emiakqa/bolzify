@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Smoke (native Dev-Build): wie auth_signin.yaml, aber OHNE clearState.
+# Voraussetzung: Bolzify ist bereits auf der Login-Maske geladen (manuell
+# per Metro + npm start --dev-client). Dieser Flow tippt nur durch.
+#
+# Nutzung sobald clearState wieder läuft → auf auth_signin.yaml zurück.
+# ─────────────────────────────────────────────────────────────────────────────
+appId: de.bolzify.app
+name: "Auth · Sign-In (native, no clearState)"
+tags:
+  - smoke-native
+  - auth
+---
+# Kein clearState — nur sicherstellen, dass die App vorne ist.
+- launchApp
+
+- extendedWaitUntil:
+    visible:
+      text: "Willkommen zurück."
+    timeout: 30000
+
+- tapOn:
+    text: "anna.b@bolzify.de"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- inputText: ${TEST_EMAIL}
+
+- tapOn:
+    text: "••••••••"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- inputText: ${TEST_PASSWORD}
+
+- hideKeyboard
+- tapOn:
+    text: "Einloggen"
+    waitToSettleTimeoutMs: 0
+
+- runFlow:
+    when:
+      visible: "Username wählen"
+    commands:
+      - tapOn: "z.B. bolzkoenig"
+      - inputText: "maestro_test"
+      - hideKeyboard
+      - tapOn: "Weiter"
+
+- runFlow:
+    when:
+      visible: "Überspringen"
+    commands:
+      - tapOn: "Überspringen"
+
+- extendedWaitUntil:
+    visible:
+      text: "Home"
+    timeout: 15000
+- assertVisible: "Spielplan"
+- assertVisible: "Meine Tipps"
+- assertVisible: "Ligen"

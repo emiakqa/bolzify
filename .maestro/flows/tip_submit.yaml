@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Smoke: Tipp abgeben (eingeloggt → Spielplan → erstes Match → Tipp speichern)
+#
+# ⚠️  SCAFFOLD — funktioniert noch NICHT out of the box, weil Tipp-Eingabe-
+# Screen (`app/tip/[matchId].tsx`) und Spielplan-List-Items noch keine
+# testIDs haben. Erste Erweiterung wenn Smoke-Auth grün ist:
+#   1. testID="match-row-{matchId}" auf der Match-Card
+#   2. testID="tip-stepper-home" / "tip-stepper-away" mit "+/−" Buttons
+#   3. testID="tip-save-button"
+#
+# Vorerst nimmt der Flow den Pfad über sichtbaren Text — fragiler, aber
+# zeigt das Pattern.
+#
+# Voraussetzung: Test-Account hat noch keinen Tipp für das erste WM2026-
+# Match (Mexiko vs. ?, 2026-06-11 18:00 MEZ) abgegeben.
+# ─────────────────────────────────────────────────────────────────────────────
+appId: de.bolzify.app
+name: "Tip · Submit prediction"
+tags:
+  - regression
+  - tip
+# KEIN `env:` Block — leere Defaults würden CLI-Args überschreiben.
+---
+# Sub-Flow: zuerst einloggen
+- runFlow:
+    file: "auth_signin.yaml"
+    env:
+      TEST_EMAIL: ${TEST_EMAIL}
+      TEST_PASSWORD: ${TEST_PASSWORD}
+
+# Auf Spielplan-Tab wechseln
+- tapOn:
+    text: "Spielplan"
+
+- extendedWaitUntil:
+    visible:
+      text: "Spielplan"
+    timeout: 10000
+
+# TODO: Sobald testIDs auf Match-Cards: tapOn id "match-row-<id>".
+# Aktuell: erstes scrollbares Element, das wie ein Match aussieht.
+# Erweitern wenn die Match-Card konkrete testIDs bekommt.
+- scroll

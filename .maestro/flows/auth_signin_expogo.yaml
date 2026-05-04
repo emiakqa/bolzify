@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Smoke (Expo-Go-Variant): wie auth_signin.yaml, aber gegen Expo Go statt
+# nativen EAS-Build. Nutzen während der Dev-Phase, wo noch kein EAS-Build
+# existiert.
+#
+# Voraussetzung:
+#   1. `npm start` läuft im anderen Terminal
+#   2. Expo Go ist im Emulator installiert (durch `a` einmal getriggert)
+#   3. EXPO_DEV_URL gesetzt (siehe Aufruf unten)
+#
+# Aufruf:
+#   maestro test .maestro/flows/auth_signin_expogo.yaml `
+#     -e TEST_EMAIL=maestro@bolzify.test `
+#     -e TEST_PASSWORD=TestPass123! `
+#     -e EXPO_DEV_URL=exp://192.168.X.X:8081
+# ─────────────────────────────────────────────────────────────────────────────
+appId: host.exp.exponent
+name: "Auth · Sign-In (Expo Go)"
+tags:
+  - smoke-expo
+  - auth
+# KEIN `env:` Block mit leeren Defaults — der überschreibt sonst die CLI-Args!
+# Maestro pickt die -e CLI-Werte automatisch auf.
+---
+# Bolzify direkt via Deep-Link in Expo Go laden.
+# (Kein blankes launchApp — das würde Expo Go auf Welcome-Screen resetten.)
+- openLink: ${EXPO_DEV_URL}
+
+# Login-Maske erkennen (bis zu 30s warten — Splash + Font-Loading)
+- extendedWaitUntil:
+    visible:
+      text: "Willkommen zurück."
+    timeout: 30000
+
+# Selection per Placeholder statt testID — Maestro/RN-Android propagiert
+# testIDs nicht zuverlässig zum nativen EditText. Placeholder funktionieren
+# immer, weil sie als Text-Knoten im Accessibility-Tree liegen.
+#
+# waitToSettleTimeoutMs: 0 → skipt das post-tap waitForAppToSettle. Sonst
+# crasht Maestros gRPC-Driver an Emoji-Surrogate-Pairs (✉, 🔒) im Field.
+- tapOn:
+    text: "anna.b@bolzify.de"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- inputText: ${TEST_EMAIL}
+
+- tapOn:
+    text: "••••••••"
+    waitToSettleTimeoutMs: 0
+- waitForAnimationToEnd:
+    timeout: 2000
+- inputText: ${TEST_PASSWORD}
+
+# Tap auf den CTA per sichtbarem Label (Submit-Button trägt "Einloggen")
+- hideKeyboard
+- tapOn:
+    text: "Einloggen"
+    waitToSettleTimeoutMs: 0
+
+# Defensiv: Frischer Test-User landet evtl. auf /set-username (Username
+# noch placeholder vom DB-Trigger). Nur ausgeführt wenn der Screen kommt.
+- runFlow:
+    when:
+      visible: "Username wählen"
+    commands:
+      - tapOn: "z.B. bolzkoenig"
+      - inputText: "maestro_test"
+      - hideKeyboard
+      - tapOn: "Weiter"
+
+# Defensiv: Onboarding-Slides wegklicken wenn AsyncStorage frisch ist.
+- runFlow:
+    when:
+      visible: "Überspringen"
+    commands:
+      - tapOn: "Überspringen"
+
+# Erfolg = Tab-Bar sichtbar
+- extendedWaitUntil:
+    visible:
+      text: "Home"
+    timeout: 15000
+- assertVisible: "Spielplan"
+- assertVisible: "Meine Tipps"
+- assertVisible: "Ligen"

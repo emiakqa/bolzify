@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Regression: Sign-Up Flow → frisches Konto + Profil-Username + Tab-Bar
+#
+# Generiert pro Run einen unique Username + E-Mail mit Timestamp-Suffix —
+# damit der Flow lokal mehrfach ohne Conflicts laufen kann.
+#
+# Erforderlich: In Supabase muss "Email-Confirmation" AUS sein (Dev-Modus),
+# sonst landet der User nach Submit auf "Check dein Postfach" statt direkt
+# auf der Home — und der Flow schlägt am `assertVisible: Home` fehl.
+#
+# Dauer: ~15s.
+# ─────────────────────────────────────────────────────────────────────────────
+appId: de.bolzify.app
+name: "Auth · Sign-Up (new account)"
+tags:
+  - regression
+  - auth
+---
+- launchApp:
+    clearState: true
+    permissions:
+      notifications: deny
+
+- extendedWaitUntil:
+    visible:
+      text: "Willkommen zurück."
+    timeout: 30000
+
+# Auf Sign-Up umschalten
+- tapOn:
+    id: "login-switch-mode"
+
+- assertVisible: "Konto anlegen."
+
+# Unique-Suffix aus Timestamp (Sekunden) — kollisionsfrei pro Run
+- evalScript: ${output.suffix = Math.floor(Date.now() / 1000)}
+
+- tapOn:
+    id: "login-username-input"
+- inputText: "mae_${output.suffix}"
+
+- tapOn:
+    id: "login-email-input"
+- inputText: "maestro_${output.suffix}@bolzify.test"
+
+- tapOn:
+    id: "login-password-input"
+- inputText: "TestPass123!"
+
+# AGB akzeptieren (CTA ist sonst disabled)
+- tapOn:
+    id: "login-terms-checkbox"
+
+- tapOn:
+    id: "login-submit-button"
+
+# Erfolg = direkt auf Home gelandet
+- extendedWaitUntil:
+    visible:
+      text: "Home"
+    timeout: 15000

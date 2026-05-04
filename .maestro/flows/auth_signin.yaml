@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Smoke: Sign-In mit bestehendem Test-Account
+#
+# Voraussetzung: Test-Account existiert bereits in der Dev-Supabase-Instanz.
+# Setze TEST_EMAIL und TEST_PASSWORD vor dem Run:
+#
+#   maestro test \
+#     -e TEST_EMAIL=maestro@bolzify.test \
+#     -e TEST_PASSWORD=TestPass123! \
+#     .maestro/flows/auth_signin.yaml
+#
+# Dauer: ~15s.
+# ─────────────────────────────────────────────────────────────────────────────
+appId: de.bolzify.app
+name: "Auth · Sign-In (existing account)"
+tags:
+  - smoke
+  - auth
+# KEIN `env:` Block — leere Defaults würden CLI-Args überschreiben.
+---
+- launchApp:
+    clearState: true
+    permissions:
+      notifications: deny
+
+# Login-Maske erkennen (Bolzplatz-Headline) — bis 30s warten (Splash + Fonts)
+- extendedWaitUntil:
+    visible:
+      text: "Willkommen zurück."
+    timeout: 30000
+
+- tapOn:
+    id: "login-email-input"
+- inputText: ${TEST_EMAIL}
+
+- tapOn:
+    id: "login-password-input"
+- inputText: ${TEST_PASSWORD}
+
+- tapOn:
+    id: "login-submit-button"
+
+# Erfolg = Tab-Bar mit "Home" sichtbar
+- extendedWaitUntil:
+    visible:
+      text: "Home"
+    timeout: 15000
+
+- assertVisible: "Spielplan"
+- assertVisible: "Meine Tipps"
+- assertVisible: "Ligen"

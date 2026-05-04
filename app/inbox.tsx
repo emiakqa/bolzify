@@ -7,20 +7,16 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
-import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import {
   Colors,
-  FontSize,
-  FontWeight,
   Fonts,
   LetterSpacing,
-  LineHeight,
   Spacing,
 } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -58,14 +54,12 @@ export default function InboxScreen() {
   };
 
   const onItemPress = async (item: InboxItem) => {
-    // Optimistic mark read
     if (!item.read_at) {
       setItems((arr) =>
         arr.map((x) => (x.id === item.id ? { ...x, read_at: new Date().toISOString() } : x)),
       );
       markRead(item.id).catch(() => {});
     }
-    // Bei Liga-Ankündigung: in die Liga springen
     if (item.kind === 'league_announcement' && item.league_id) {
       router.push(`/leagues/${item.league_id}`);
     }
@@ -112,33 +106,20 @@ export default function InboxScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.header}>
+      <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <ThemedText
-            style={{
-              color: c.textMuted,
-              fontSize: FontSize.md,
-              lineHeight: LineHeight.md,
-              fontFamily: Fonts?.rounded,
-            }}>
-            ← Zurück
-          </ThemedText>
+          <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+            ‹ Zurück
+          </Text>
         </Pressable>
         {unreadCount > 0 ? (
           <Pressable onPress={onMarkAllRead} hitSlop={10}>
-            <ThemedText
-              style={{
-                color: c.accent,
-                fontSize: FontSize.sm,
-                lineHeight: LineHeight.sm,
-                fontFamily: Fonts?.rounded,
-                fontWeight: FontWeight.semibold,
-              }}>
+            <Text style={{ color: c.accent, fontFamily: Fonts.body.semibold, fontSize: 13 }}>
               Alle gelesen
-            </ThemedText>
+            </Text>
           </Pressable>
         ) : (
-          <View />
+          <View style={{ width: 50 }} />
         )}
       </View>
 
@@ -148,84 +129,133 @@ export default function InboxScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
         }>
-        <ThemedText style={[styles.h1, { color: c.text }]}>
-          Postfach
-          {unreadCount > 0 ? (
-            <ThemedText style={{ color: c.accent }}> · {unreadCount} neu</ThemedText>
-          ) : null}
-        </ThemedText>
+        <View style={styles.headerBlock}>
+          <Text
+            style={{
+              color: c.textMuted,
+              fontFamily: Fonts.mono.bold,
+              fontSize: 11,
+              letterSpacing: LetterSpacing.label,
+              textTransform: 'uppercase',
+            }}>
+            {unreadCount > 0 ? `${unreadCount} ungelesen` : 'Alles gelesen'}
+          </Text>
+          <Text
+            style={{
+              color: c.text,
+              fontFamily: Fonts.display.bold,
+              fontSize: 32,
+              lineHeight: 38,
+              letterSpacing: -1,
+              marginTop: 4,
+            }}>
+            Postfach
+          </Text>
+        </View>
 
         {items.length === 0 ? (
           <Card padding="lg" style={styles.emptyCard}>
-            <ThemedText
+            <Text
               style={{
                 color: c.textFaint,
-                fontFamily: Fonts?.rounded,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
+                fontFamily: Fonts.body.regular,
+                fontSize: 14,
+                lineHeight: 22,
                 textAlign: 'center',
               }}>
               Noch keine Nachrichten.{'\n'}Spielleiter und Bolzify-Team posten hier.
-            </ThemedText>
+            </Text>
           </Card>
         ) : (
           <View style={{ gap: Spacing.sm }}>
             {items.map((item) => {
               const unread = !item.read_at;
-              const sourceLabel =
-                item.kind === 'broadcast'
-                  ? 'Bolzify-Team'
-                  : `Liga · ${item.league_name_snapshot ?? '—'}`;
+              const isBroadcast = item.kind === 'broadcast';
+              const sourceLabel = isBroadcast
+                ? 'Bolzify-Team'
+                : item.league_name_snapshot ?? '—';
+              const sender = item.sender_username_snapshot ?? '—';
+              const initials = (sender === '—' ? '??' : sender).slice(0, 2).toUpperCase();
               return (
                 <Card
                   key={item.id}
                   padding="md"
-                  variant={unread ? 'accent' : 'default'}
+                  variant="default"
                   onPress={() => onItemPress(item)}
-                  onLongPress={() => onItemLongPress(item)}>
-                  <View style={styles.itemHeader}>
-                    <View style={styles.sourceRow}>
-                      {item.kind === 'broadcast' ? (
-                        <Badge label="Team" tone="accent" />
-                      ) : null}
-                      <ThemedText
+                  onLongPress={() => onItemLongPress(item)}
+                  style={{ position: 'relative' }}>
+                  {/* Linker Unread-Strip */}
+                  {unread ? (
+                    <View
+                      style={[
+                        styles.unreadStrip,
+                        { backgroundColor: c.warm },
+                      ]}
+                    />
+                  ) : null}
+                  <View style={styles.itemBody}>
+                    <View
+                      style={[
+                        styles.itemAvatar,
+                        {
+                          backgroundColor: isBroadcast ? c.accentSoft : c.warmSoft,
+                        },
+                      ]}>
+                      <Text
+                        style={{
+                          color: isBroadcast ? c.accent : c.warm,
+                          fontFamily: Fonts.display.bold,
+                          fontSize: 14,
+                        }}>
+                        {initials}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={styles.headerRow}>
+                        <Text
+                          style={{
+                            color: c.text,
+                            fontFamily: Fonts.display.bold,
+                            fontSize: 14,
+                            letterSpacing: -0.2,
+                          }}
+                          numberOfLines={1}>
+                          @{sender}
+                        </Text>
+                        <Text
+                          style={{
+                            color: c.textMuted,
+                            fontFamily: Fonts.mono.semibold,
+                            fontSize: 10,
+                            letterSpacing: 0.4,
+                          }}
+                          numberOfLines={1}>
+                          · {sourceLabel}
+                        </Text>
+                      </View>
+                      <Text
                         style={{
                           color: c.textMuted,
-                          fontSize: FontSize.xs,
-                          lineHeight: LineHeight.xs,
-                          fontFamily: Fonts?.rounded,
-                          fontWeight: FontWeight.bold,
-                          textTransform: 'uppercase',
-                          letterSpacing: LetterSpacing.label,
-                          flex: 1,
+                          fontFamily: Fonts.body.regular,
+                          fontSize: 13,
+                          lineHeight: 19,
                         }}
-                        numberOfLines={1}>
-                        {sourceLabel}
-                      </ThemedText>
+                        numberOfLines={3}>
+                        {item.body}
+                      </Text>
+                      <Text
+                        style={{
+                          color: c.textFaint,
+                          fontFamily: Fonts.mono.semibold,
+                          fontSize: 10,
+                          letterSpacing: 0.6,
+                          textTransform: 'uppercase',
+                          marginTop: 6,
+                        }}>
+                        {formatRelativeTime(item.created_at)}
+                      </Text>
                     </View>
-                    {unread ? <View style={[styles.unreadDot, { backgroundColor: c.accent }]} /> : null}
                   </View>
-                  <ThemedText
-                    style={{
-                      color: c.text,
-                      fontSize: FontSize.md,
-                      lineHeight: LineHeight.md,
-                      fontFamily: Fonts?.rounded,
-                      marginTop: Spacing.xs,
-                    }}>
-                    {item.body}
-                  </ThemedText>
-                  <ThemedText
-                    style={{
-                      color: c.textFaint,
-                      fontSize: FontSize.xs,
-                      lineHeight: LineHeight.xs,
-                      fontFamily: Fonts?.rounded,
-                      marginTop: Spacing.sm,
-                    }}>
-                    @{item.sender_username_snapshot ?? '—'} ·{' '}
-                    {formatRelativeTime(item.created_at)}
-                  </ThemedText>
                 </Card>
               );
             })}
@@ -239,36 +269,41 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+    paddingVertical: Spacing.md,
   },
-  h1: {
-    fontSize: FontSize.xxl,
-    lineHeight: LineHeight.xxl,
-    fontWeight: FontWeight.heavy,
-    fontFamily: Fonts?.rounded,
-    letterSpacing: LetterSpacing.heading,
+  headerBlock: {
     marginBottom: Spacing.lg,
   },
   emptyCard: { alignItems: 'center' },
-  itemHeader: {
+  unreadStrip: {
+    position: 'absolute',
+    top: 16,
+    left: -2,
+    width: 4,
+    height: 28,
+    borderRadius: 2,
+  },
+  itemBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  itemAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  sourceRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    gap: 6,
+    marginBottom: 2,
   },
 });

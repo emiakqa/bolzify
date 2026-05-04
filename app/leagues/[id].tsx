@@ -10,23 +10,20 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SectionHeader } from '@/components/ui/section-header';
 import {
   Colors,
-  FontSize,
-  FontWeight,
   Fonts,
   LetterSpacing,
-  LineHeight,
   Radius,
   Spacing,
 } from '@/constants/design';
@@ -84,7 +81,6 @@ export default function LeagueDetailScreen() {
       return;
     }
 
-    // Sequentiell, damit ein members-Fehler den league-Lookup nicht kaputtmacht.
     const { data: lg, error: lgErr } = await supabase
       .from('leagues')
       .select('id, name, invite_code, created_by')
@@ -92,7 +88,6 @@ export default function LeagueDetailScreen() {
       .maybeSingle();
 
     if (lgErr) {
-      console.warn('league load error:', lgErr.message);
       setLeague(null);
       setErrorMsg(`leagues select: ${lgErr.message}`);
       setLoading(false);
@@ -114,23 +109,17 @@ export default function LeagueDetailScreen() {
       .order('joined_at');
 
     if (memErr) {
-      console.warn('members load error:', memErr.message);
       setMembers([]);
       setErrorMsg(`league_members select: ${memErr.message}`);
       setLoading(false);
       return;
     }
 
-    // Usernames + Punkte in zwei parallelen Batches.
     const userIds = (mems ?? []).map((m) => m.user_id);
     const profileMap = new Map<string, string>();
     const pointsMap = new Map<string, { total: number; count: number }>();
 
     if (userIds.length > 0) {
-      // scored_special_tips parallel mit holen — RLS lässt fremde Rows erst
-      // nach Sondertipp-Deadline (Turnierstart) durch, vorher kommen nur die
-      // eigenen zurück. Vor der WM also nur self → Liga-Ranking zeigt 0
-      // Sondertipp-Punkte für andere, das ist die intendierte Lock-Phase.
       const [{ data: profiles }, { data: scored }, { data: scoredSpecial }] =
         await Promise.all([
           supabase.from('profiles').select('id, username').in('id', userIds),
@@ -150,8 +139,6 @@ export default function LeagueDetailScreen() {
         cur.count += 1;
         pointsMap.set(s.user_id, cur);
       }
-      // scored_count zählen wir bewusst NICHT für Sondertipps mit — der
-      // „N Tipps gewertet"-Subtitle bezieht sich nur auf Match-Tipps.
       for (const s of scoredSpecial ?? []) {
         const cur = pointsMap.get(s.user_id) ?? { total: 0, count: 0 };
         cur.total += s.total_points ?? 0;
@@ -170,7 +157,6 @@ export default function LeagueDetailScreen() {
       };
     });
 
-    // Ranking: höchste Punkte zuerst, bei Gleichstand alphabetisch
     enriched.sort((a, b) => {
       if (b.total_points !== a.total_points) return b.total_points - a.total_points;
       return (a.username ?? '').localeCompare(b.username ?? '');
@@ -178,8 +164,6 @@ export default function LeagueDetailScreen() {
 
     setMembers(enriched);
 
-    // Ankündigungen laden — separat, schlägt nicht durch wenn Migration
-    // 0011 noch nicht ausgeführt wurde (UI zeigt dann einfach leere Liste).
     const { data: annRows, error: annErr } = await supabase
       .from('league_announcements')
       .select('id, body, created_at, author_id')
@@ -188,15 +172,8 @@ export default function LeagueDetailScreen() {
       .limit(50);
 
     if (annErr) {
-      // Wahrscheinlich: Tabelle existiert noch nicht (Migration 0011 fehlt)
-      // → leise schlucken, Loglevel info statt warn.
-      console.info('announcements load skipped:', annErr.message);
       setAnnouncements([]);
     } else {
-      // Author-Usernames anreichern. profileMap haben wir oben für Members
-      // aufgebaut, aber Author kann eine Person sein, die nicht (mehr)
-      // Mitglied ist (z.B. Liga-Admin, der nur Ersteller, nicht Member ist).
-      // Daher fehlende Profile separat nachladen.
       const missing = (annRows ?? [])
         .map((a) => a.author_id)
         .filter((aid) => !profileMap.has(aid));
@@ -240,12 +217,11 @@ export default function LeagueDetailScreen() {
     try {
       await Share.share({
         message:
-          `Komm in meine Bolzify-Liga "${league.name}" \u26BD\uFE0F\n\n` +
-          `Code: ${league.invite_code}\n` +
-          `\u2192 ${joinUrl}`,
+          `Komm in meine Bolzify-Liga "${league.name}" ⚽️\n\n` +
+          `Code: ${league.invite_code}\n→ ${joinUrl}`,
       });
     } catch {
-      // silent — user hat abgebrochen
+      /* user cancelled */
     }
   };
 
@@ -269,7 +245,6 @@ export default function LeagueDetailScreen() {
       setPostError(error?.message ?? 'Senden fehlgeschlagen.');
       return;
     }
-    // Optimistic prepend — kein Reload nötig.
     setAnnouncements((prev) => [
       {
         id: data.id,
@@ -298,7 +273,6 @@ export default function LeagueDetailScreen() {
             .delete()
             .eq('id', a.id);
           if (error) {
-            // Rollback bei Fehler
             setAnnouncements(prev);
             Alert.alert('Fehler', error.message);
           }
@@ -358,86 +332,64 @@ export default function LeagueDetailScreen() {
   if (!league) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
-        <View style={styles.header}>
+        <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
-            <ThemedText
-              style={{
-                color: c.textMuted,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
-                fontFamily: Fonts?.rounded,
-              }}>
-              ‹ Zurück
-            </ThemedText>
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+              ‹ Ligen
+            </Text>
           </Pressable>
-          <View style={{ flex: 1 }} />
         </View>
         <View style={[styles.center, { padding: Spacing.xl }]}>
-          <ThemedText
+          <Text
             style={{
               color: c.text,
-              fontSize: FontSize.md,
-              lineHeight: LineHeight.md,
-              fontFamily: Fonts?.rounded,
-              fontWeight: FontWeight.semibold,
+              fontFamily: Fonts.display.bold,
+              fontSize: 17,
               marginBottom: Spacing.sm,
             }}>
             Liga nicht gefunden
-          </ThemedText>
-          <ThemedText
+          </Text>
+          <Text
             style={{
               color: c.textMuted,
+              fontFamily: Fonts.body.regular,
+              fontSize: 13,
               textAlign: 'center',
-              fontSize: FontSize.sm,
-              lineHeight: LineHeight.sm,
-              fontFamily: Fonts?.rounded,
             }}>
             {errorMsg ?? 'Unbekannter Fehler.'}
-          </ThemedText>
-          <ThemedText
-            style={{
-              color: c.textFaint,
-              textAlign: 'center',
-              fontSize: FontSize.xs,
-              lineHeight: LineHeight.xs,
-              fontFamily: Fonts?.rounded,
-              marginTop: Spacing.lg,
-            }}>
-            Hinweis: Ausstehende Migrations im Supabase SQL-Editor ausführen:{'\n'}
-            0003_fix_rls_recursion.sql · 0005_league_join.sql
-          </ThemedText>
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
   const isCreator = league.created_by === user?.id;
+  const myIdx = members.findIndex((m) => m.user_id === user?.id);
+  const myRank = myIdx >= 0 ? myIdx + 1 : null;
+  const me = myIdx >= 0 ? members[myIdx] : null;
+  const leader = members[0];
+  const myDiff = myRank && myRank > 1 && me && leader
+    ? leader.total_points - me.total_points
+    : null;
+  const maxPts = leader?.total_points ?? 1;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
-      <View style={styles.header}>
+      <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <ThemedText
-            style={{
-              color: c.textMuted,
-              fontSize: FontSize.md,
-              lineHeight: LineHeight.md,
-              fontFamily: Fonts?.rounded,
-            }}>
-            ‹ Zurück
-          </ThemedText>
+          <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+            ‹ Ligen
+          </Text>
         </Pressable>
         <Pressable onPress={onLeave} hitSlop={12}>
-          <ThemedText
+          <Text
             style={{
               color: c.danger,
-              fontSize: FontSize.sm,
-              lineHeight: LineHeight.sm,
-              fontFamily: Fonts?.rounded,
-              fontWeight: FontWeight.semibold,
+              fontFamily: Fonts.body.semibold,
+              fontSize: 13,
             }}>
             {isCreator ? 'Löschen' : 'Verlassen'}
-          </ThemedText>
+          </Text>
         </Pressable>
       </View>
 
@@ -445,218 +397,328 @@ export default function LeagueDetailScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
-        }>
-        <ThemedText style={[styles.title, { color: c.text }]}>{league.name}</ThemedText>
-
-        <Card variant="accent" padding="lg" onPress={onShare} style={styles.codeCard}>
-          <ThemedText
-            style={{
-              color: c.accent,
-              fontSize: FontSize.xs,
-              lineHeight: LineHeight.xs,
-              fontFamily: Fonts?.rounded,
-              fontWeight: FontWeight.bold,
-              textTransform: 'uppercase',
-              letterSpacing: LetterSpacing.label,
-            }}>
-            Invite-Code · Tippen zum Teilen
-          </ThemedText>
-          <ThemedText
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            style={[styles.code, { color: c.accent }]}>
-            {league.invite_code}
-          </ThemedText>
-        </Card>
-
-        <SectionHeader title="Ankündigungen" marginTop={Spacing.lg} />
-
-        {isCreator ? (
-          <Card padding="md" style={styles.composerCard}>
-            <TextInput
-              value={draft}
-              onChangeText={(t) => {
-                if (t.length <= MAX_ANNOUNCEMENT_LEN) setDraft(t);
-              }}
-              placeholder="Nachricht an alle Mitglieder…"
-              placeholderTextColor={c.textFaint}
-              multiline
-              editable={!posting}
-              style={[
-                styles.composerInput,
-                {
-                  color: c.text,
-                  fontFamily: Fonts?.rounded,
-                  borderColor: draft.trim().length > 0 ? c.accentBorder : c.border,
-                  backgroundColor: c.surface,
-                },
-              ]}
-            />
-            <View style={styles.composerFooter}>
-              <ThemedText
-                style={{
-                  color: c.textFaint,
-                  fontSize: FontSize.xs,
-                  lineHeight: LineHeight.xs,
-                  fontFamily: Fonts?.rounded,
-                }}>
-                {draft.length}/{MAX_ANNOUNCEMENT_LEN}
-              </ThemedText>
-              <Button
-                label={posting ? 'Sende…' : 'Senden'}
-                onPress={postAnnouncement}
-                disabled={posting || draft.trim().length === 0}
-                loading={posting}
-                size="sm"
-              />
-            </View>
-            {postError ? (
-              <ThemedText
-                style={{
-                  color: c.danger,
-                  fontSize: FontSize.sm,
-                  lineHeight: LineHeight.sm,
-                  fontFamily: Fonts?.rounded,
-                  marginTop: Spacing.sm,
-                }}>
-                {postError}
-              </ThemedText>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {announcements.length === 0 ? (
-          <Card padding="lg" style={{ alignItems: 'center' }}>
-            <ThemedText
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
+          }>
+          {/* Liga-Header */}
+          <View>
+            <Text
               style={{
-                color: c.textFaint,
-                fontSize: FontSize.sm,
-                lineHeight: LineHeight.sm,
-                fontFamily: Fonts?.rounded,
-                textAlign: 'center',
+                color: c.textMuted,
+                fontFamily: Fonts.mono.bold,
+                fontSize: 11,
+                letterSpacing: LetterSpacing.label,
+                textTransform: 'uppercase',
               }}>
-              {isCreator
-                ? 'Noch keine Nachrichten verfasst.'
-                : 'Der Spielleiter hat noch nichts gepostet.'}
-            </ThemedText>
-          </Card>
-        ) : (
-          <View style={{ gap: Spacing.sm }}>
-            {announcements.map((a) => (
-              <Card key={a.id} padding="md">
-                <ThemedText
+              Liga · {members.length} {members.length === 1 ? 'Mitglied' : 'Mitglieder'}
+            </Text>
+            <Text
+              style={{
+                color: c.text,
+                fontFamily: Fonts.display.bold,
+                fontSize: 30,
+                lineHeight: 36,
+                letterSpacing: -1,
+                marginTop: 4,
+              }}>
+              {league.name}
+            </Text>
+          </View>
+
+          {/* Mein Stand */}
+          {me && myRank ? (
+            <Card variant="accent" padding="md">
+              <View style={styles.meRow}>
+                <Text
+                  style={{
+                    color: c.accent,
+                    fontFamily: Fonts.display.bold,
+                    fontSize: 44,
+                    letterSpacing: -1.5,
+                    lineHeight: 44,
+                  }}>
+                  #{myRank}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: c.text,
+                      fontFamily: Fonts.display.bold,
+                      fontSize: 15,
+                      letterSpacing: -0.3,
+                    }}>
+                    Du · @{me.username ?? '—'}
+                  </Text>
+                  <Text
+                    style={{
+                      color: c.accent,
+                      fontFamily: Fonts.mono.semibold,
+                      fontSize: 11,
+                      letterSpacing: 0.4,
+                      textTransform: 'uppercase',
+                      marginTop: 2,
+                    }}>
+                    {me.total_points} PKT
+                    {myDiff !== null ? ` · ${myDiff} PKT HINTER #1` : ' · LEADER'}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          ) : null}
+
+          {/* Invite-Code zum Teilen */}
+          <Card variant="flat" padding="md" onPress={onShare}>
+            <View style={styles.codeRow}>
+              <View>
+                <Text
+                  style={{
+                    color: c.textMuted,
+                    fontFamily: Fonts.mono.bold,
+                    fontSize: 10,
+                    letterSpacing: LetterSpacing.label,
+                    textTransform: 'uppercase',
+                  }}>
+                  Invite-Code · Teilen
+                </Text>
+                <Text
                   style={{
                     color: c.text,
-                    fontSize: FontSize.md,
-                    lineHeight: LineHeight.md,
-                    fontFamily: Fonts?.rounded,
+                    fontFamily: Fonts.mono.bold,
+                    fontSize: 22,
+                    letterSpacing: 2,
+                    marginTop: 4,
                   }}>
-                  {a.body}
-                </ThemedText>
-                <View style={styles.annoMeta}>
-                  <ThemedText
+                  #{league.invite_code}
+                </Text>
+              </View>
+              <Text style={{ color: c.accent, fontFamily: Fonts.body.semibold, fontSize: 13 }}>
+                Teilen ›
+              </Text>
+            </View>
+          </Card>
+
+          {/* Ankündigungen */}
+          <SectionHeader title="Ankündigungen" marginTop={Spacing.sm} />
+
+          {isCreator ? (
+            <Card padding="md">
+              <TextInput
+                value={draft}
+                onChangeText={(t) => {
+                  if (t.length <= MAX_ANNOUNCEMENT_LEN) setDraft(t);
+                }}
+                placeholder="Nachricht an alle Mitglieder…"
+                placeholderTextColor={c.textFaint}
+                multiline
+                editable={!posting}
+                style={[
+                  styles.composerInput,
+                  {
+                    color: c.text,
+                    fontFamily: Fonts.body.regular,
+                    borderColor: draft.trim().length > 0 ? c.accentBorder : c.border,
+                    backgroundColor: c.surfaceSunken,
+                  },
+                ]}
+              />
+              <View style={styles.composerFooter}>
+                <Text
+                  style={{
+                    color: c.textFaint,
+                    fontFamily: Fonts.mono.semibold,
+                    fontSize: 11,
+                    letterSpacing: 0.4,
+                  }}>
+                  {draft.length}/{MAX_ANNOUNCEMENT_LEN}
+                </Text>
+                <Button
+                  label={posting ? 'Sende…' : 'Senden'}
+                  onPress={postAnnouncement}
+                  disabled={posting || draft.trim().length === 0}
+                  loading={posting}
+                  size="sm"
+                />
+              </View>
+              {postError ? (
+                <Text
+                  style={{
+                    color: c.danger,
+                    fontFamily: Fonts.body.medium,
+                    fontSize: 13,
+                    marginTop: Spacing.sm,
+                  }}>
+                  {postError}
+                </Text>
+              ) : null}
+            </Card>
+          ) : null}
+
+          {announcements.length === 0 ? (
+            <Card padding="lg" style={{ alignItems: 'center' }}>
+              <Text
+                style={{
+                  color: c.textFaint,
+                  fontFamily: Fonts.body.regular,
+                  fontSize: 13,
+                  textAlign: 'center',
+                }}>
+                {isCreator
+                  ? 'Noch keine Nachrichten verfasst.'
+                  : 'Der Spielleiter hat noch nichts gepostet.'}
+              </Text>
+            </Card>
+          ) : (
+            <View style={{ gap: Spacing.sm }}>
+              {announcements.map((a) => (
+                <Card key={a.id} padding="md">
+                  <Text
                     style={{
-                      color: c.textFaint,
-                      fontSize: FontSize.xs,
-                      lineHeight: LineHeight.xs,
-                      fontFamily: Fonts?.rounded,
+                      color: c.text,
+                      fontFamily: Fonts.body.regular,
+                      fontSize: 14,
+                      lineHeight: 21,
                     }}>
-                    @{a.author_username ?? '—'} · {formatRelativeTime(a.created_at)}
-                  </ThemedText>
-                  {isCreator ? (
-                    <Pressable onPress={() => deleteAnnouncement(a)} hitSlop={8}>
-                      <ThemedText
-                        style={{
-                          color: c.danger,
-                          fontSize: FontSize.xs,
-                          lineHeight: LineHeight.xs,
-                          fontFamily: Fonts?.rounded,
-                          fontWeight: FontWeight.semibold,
-                        }}>
-                        Löschen
-                      </ThemedText>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </Card>
-            ))}
+                    {a.body}
+                  </Text>
+                  <View style={styles.annoMeta}>
+                    <Text
+                      style={{
+                        color: c.textFaint,
+                        fontFamily: Fonts.mono.semibold,
+                        fontSize: 10,
+                        letterSpacing: 0.4,
+                        textTransform: 'uppercase',
+                      }}>
+                      @{a.author_username ?? '—'} · {formatRelativeTime(a.created_at)}
+                    </Text>
+                    {isCreator ? (
+                      <Pressable onPress={() => deleteAnnouncement(a)} hitSlop={8}>
+                        <Text
+                          style={{
+                            color: c.danger,
+                            fontFamily: Fonts.body.semibold,
+                            fontSize: 12,
+                          }}>
+                          Löschen
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </Card>
+              ))}
+            </View>
+          )}
+
+          {/* Ranking-Header-Row */}
+          <SectionHeader title={`Tabelle · ${members.length}`} marginTop={Spacing.lg} />
+          <View style={styles.rankHeader}>
+            <Text style={[styles.rankHeaderCell, { color: c.textFaint, width: 28 }]}>#</Text>
+            <Text
+              style={[
+                styles.rankHeaderCell,
+                { color: c.textFaint, flex: 1, textAlign: 'left' },
+              ]}>
+              SPIELER
+            </Text>
+            <Text
+              style={[
+                styles.rankHeaderCell,
+                { color: c.textFaint, minWidth: 70, textAlign: 'right' },
+              ]}>
+              PKT
+            </Text>
           </View>
-        )}
 
-        <SectionHeader title={`Ranking (${members.length})`} marginTop={Spacing.lg} />
-
-        <View style={{ gap: Spacing.sm }}>
-          {members.map((m, idx) => {
-            const isMe = m.user_id === user?.id;
-            const isAdmin = m.user_id === league.created_by;
-            const rank = idx + 1;
-            return (
-              <Card
-                key={m.user_id}
-                variant={isMe ? 'accent' : 'default'}
-                padding="md">
-                <View style={styles.memberRow}>
-                  <ThemedText
-                    style={[
-                      styles.rank,
-                      {
-                        color: rank <= 3 ? c.accent : c.textFaint,
-                        fontFamily: Fonts?.rounded,
-                      },
-                    ]}>
+          <View>
+            {members.map((m, idx) => {
+              const isMe = m.user_id === user?.id;
+              const isAdmin = m.user_id === league.created_by;
+              const rank = idx + 1;
+              const isPodium = rank <= 3;
+              const pct = Math.max(0, (m.total_points / Math.max(maxPts, 1)) * 100);
+              return (
+                <View
+                  key={m.user_id}
+                  style={[
+                    styles.rankRow,
+                    {
+                      borderTopColor: c.divider,
+                      backgroundColor: isMe ? c.accentSoft : 'transparent',
+                      borderRadius: isMe ? 10 : 0,
+                      borderTopWidth: isMe ? 0 : 1,
+                      paddingHorizontal: isMe ? 8 : 4,
+                    },
+                  ]}>
+                  <Text
+                    style={{
+                      color: isPodium ? c.accent : c.textMuted,
+                      fontFamily: Fonts.display.bold,
+                      fontSize: 18,
+                      letterSpacing: -0.5,
+                      width: 28,
+                      textAlign: 'center',
+                    }}>
                     {rank}
-                  </ThemedText>
+                  </Text>
                   <View style={{ flex: 1 }}>
                     <View style={styles.nameRow}>
-                      <ThemedText
+                      <Text
                         style={{
                           color: c.text,
-                          fontSize: FontSize.md,
-                          lineHeight: LineHeight.md,
-                          fontFamily: Fonts?.rounded,
-                          fontWeight: FontWeight.semibold,
+                          fontFamily: Fonts.display.bold,
+                          fontSize: 14,
+                          letterSpacing: -0.2,
                         }}
                         numberOfLines={1}>
                         @{m.username ?? '—'}
-                        {isMe ? ' (du)' : ''}
-                      </ThemedText>
-                      {isAdmin ? <Badge label="Admin" tone="accent" /> : null}
+                      </Text>
+                      {isAdmin ? <Badge label="ADMIN" tone="accent" /> : null}
                     </View>
-                    <ThemedText
+                    <Text
                       style={{
                         color: c.textMuted,
-                        fontSize: FontSize.xs,
-                        lineHeight: LineHeight.xs,
-                        fontFamily: Fonts?.rounded,
+                        fontFamily: Fonts.mono.regular,
+                        fontSize: 10,
+                        letterSpacing: 0.3,
                         marginTop: 2,
+                        textTransform: 'uppercase',
                       }}>
                       {m.scored_count === 0
                         ? 'noch keine Tipps gewertet'
-                        : `${m.scored_count} Tipp${m.scored_count === 1 ? '' : 's'} gewertet`}
-                    </ThemedText>
+                        : `${m.scored_count} TIPP${m.scored_count === 1 ? '' : 'S'} GEWERTET`}
+                    </Text>
                   </View>
-                  <ThemedText
-                    style={[
-                      styles.points,
-                      {
+                  <View style={{ alignItems: 'flex-end', minWidth: 70 }}>
+                    <Text
+                      style={{
                         color: c.text,
-                        fontFamily: Fonts?.rounded,
-                      },
-                    ]}>
-                    {m.total_points}
-                  </ThemedText>
+                        fontFamily: Fonts.display.bold,
+                        fontSize: 17,
+                        letterSpacing: -0.3,
+                        lineHeight: 18,
+                      }}>
+                      {m.total_points}
+                    </Text>
+                    <View style={[styles.pctBar, { backgroundColor: c.surfaceSunken }]}>
+                      <View
+                        style={{
+                          width: `${pct}%`,
+                          height: '100%',
+                          backgroundColor: isMe ? c.accent : c.textMuted,
+                          opacity: isMe ? 1 : 0.5,
+                        }}
+                      />
+                    </View>
+                  </View>
                 </View>
-              </Card>
-            );
-          })}
-        </View>
-      </ScrollView>
+              );
+            })}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -664,7 +726,7 @@ export default function LeagueDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -672,54 +734,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo, gap: Spacing.md },
-  title: {
-    fontSize: FontSize.xxl,
-    lineHeight: LineHeight.xxl,
-    fontWeight: FontWeight.heavy,
-    fontFamily: Fonts?.rounded,
-    letterSpacing: LetterSpacing.heading,
-    marginBottom: Spacing.sm,
-  },
-  codeCard: {
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  code: {
-    fontSize: FontSize.display,
-    lineHeight: LineHeight.display,
-    fontFamily: Fonts?.rounded,
-    fontWeight: FontWeight.heavy,
-    letterSpacing: 3,
-    includeFontPadding: false,
-    paddingHorizontal: Spacing.md,
-  },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  scroll: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.jumbo,
     gap: Spacing.md,
   },
-  nameRow: {
+  meRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 14,
   },
-  rank: {
-    fontSize: FontSize.lg,
-    lineHeight: LineHeight.lg,
-    fontWeight: FontWeight.heavy,
-    minWidth: 28,
-    textAlign: 'center',
-  },
-  points: {
-    fontSize: FontSize.xl,
-    lineHeight: LineHeight.xl,
-    fontWeight: FontWeight.heavy,
-    minWidth: 44,
-    textAlign: 'right',
-  },
-  composerCard: {
-    gap: Spacing.sm,
+  codeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   composerInput: {
     minHeight: 80,
@@ -727,9 +755,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     padding: Spacing.md,
-    fontSize: FontSize.md,
-    lineHeight: LineHeight.md,
+    fontSize: 14,
+    lineHeight: 21,
     textAlignVertical: 'top',
+    marginBottom: Spacing.sm,
   },
   composerFooter: {
     flexDirection: 'row',
@@ -741,5 +770,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: Spacing.sm,
+  },
+  rankHeader: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  rankHeaderCell: {
+    fontFamily: 'JetBrainsMono_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+  rankRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  pctBar: {
+    height: 3,
+    borderRadius: 999,
+    marginTop: 4,
+    overflow: 'hidden',
+    width: 60,
   },
 });

@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, isPlaceholderUsername, useAuth } from '@/lib/auth';
+import { useAppFonts } from '@/lib/fonts';
 import { clearAllReminders, syncReminders } from '@/lib/notifications';
 import { hasSeenOnboarding, subscribeOnboarding } from '@/lib/onboarding';
 
@@ -122,6 +123,13 @@ function AuthGate() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [fontsLoaded] = useAppFonts();
+
+  // Splash-Screen beibehalten bis Custom-Fonts geladen sind — sonst flackert
+  // ein Frame mit System-Font und „springt" dann auf Familjen Grotesk um.
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

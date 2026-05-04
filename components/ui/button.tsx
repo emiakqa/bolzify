@@ -9,10 +9,10 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { Colors, FontSize, FontWeight, Fonts, Radius, Spacing } from '@/constants/design';
+import { Colors, FontSize, Fonts, Radius, Shadow, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'warm' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 type Props = Omit<PressableProps, 'style'> & {
@@ -27,16 +27,19 @@ type Props = Omit<PressableProps, 'style'> & {
 };
 
 /**
- * Modern Button — pill-rounded, klare Variants.
- * - primary: gefüllt mit Akzent-Farbe (Haupt-CTA)
- * - secondary: Surface mit Border (sekundärer Action)
- * - ghost: nur Text + Background-Tint beim Pressed (für inline Actions)
- * - danger: rot gefüllt für destruktive Actions (Account löschen etc.)
+ * Bolzplatz-Button — alle Buttons sind Pills (Radius 999), Familjen Grotesk Bold.
+ *
+ * Variants:
+ * - `primary` — accent bg + accentFg, Shadow.sm. Haupt-CTA.
+ * - `secondary` — transparent bg + 1.5px borderStrong + text-Farbe.
+ * - `warm` — warm bg + warmFg. NUR für Sondertipp-/Streak-/Postfach-Aktionen.
+ * - `ghost` — surfaceSunken bg, kein Border. Inline-Aktionen.
+ * - `danger` — danger bg, weißer Text. Destruktiv.
  *
  * Sizes:
- * - sm: kompakt für Inline-Buttons in Karten
- * - md: Standard
- * - lg: prominenter Hero-CTA
+ * - `sm` — 36px hoch
+ * - `md` — 48px hoch (Default)
+ * - `lg` — 56px hoch (Hero-CTA)
  */
 export function Button({
   label,
@@ -54,24 +57,24 @@ export function Button({
   const c = Colors[scheme];
 
   const sizeMap = {
-    sm: { paddingV: Spacing.sm, paddingH: Spacing.md, fontSize: FontSize.sm },
-    md: { paddingV: Spacing.md, paddingH: Spacing.lg, fontSize: FontSize.md },
-    lg: { paddingV: Spacing.md + 2, paddingH: Spacing.xl, fontSize: FontSize.lg },
+    sm: { height: 36, paddingH: Spacing.md, fontSize: FontSize.sm },
+    md: { height: 48, paddingH: Spacing.lg, fontSize: FontSize.md },
+    lg: { height: 56, paddingH: Spacing.xl, fontSize: FontSize.lg },
   };
 
   const variantMap: Record<
     Variant,
-    { bg: string; fg: string; border: string | undefined }
+    { bg: string; fg: string; border: string | undefined; shadow: boolean }
   > = {
-    primary: { bg: c.accent, fg: c.accentFg, border: undefined },
-    secondary: { bg: c.surface, fg: c.text, border: c.borderStrong },
-    ghost: { bg: 'transparent', fg: c.text, border: undefined },
-    danger: { bg: c.danger, fg: '#FFFFFF', border: undefined },
+    primary: { bg: c.accent, fg: c.accentFg, border: undefined, shadow: true },
+    secondary: { bg: 'transparent', fg: c.text, border: c.borderStrong, shadow: false },
+    warm: { bg: c.warm, fg: c.warmFg, border: undefined, shadow: true },
+    ghost: { bg: c.surfaceSunken, fg: c.text, border: undefined, shadow: false },
+    danger: { bg: c.danger, fg: '#FFFFFF', border: undefined, shadow: false },
   };
 
   const s = sizeMap[size];
   const v = variantMap[variant];
-
   const isDisabled = disabled || loading;
 
   return (
@@ -81,15 +84,16 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         {
-          paddingVertical: s.paddingV,
+          height: s.height,
           paddingHorizontal: s.paddingH,
           backgroundColor: v.bg,
           borderColor: v.border ?? 'transparent',
-          borderWidth: v.border ? 1 : 0,
+          borderWidth: v.border ? 1.5 : 0,
           alignSelf: fullWidth ? 'stretch' : 'flex-start',
           opacity: isDisabled ? 0.55 : pressed ? 0.85 : 1,
           transform: [{ scale: pressed && !isDisabled ? 0.97 : 1 }],
         },
+        v.shadow ? Shadow.sm : null,
         style,
       ]}>
       {loading ? (
@@ -101,9 +105,8 @@ export function Button({
             style={{
               color: v.fg,
               fontSize: s.fontSize,
-              fontWeight: FontWeight.semibold,
-              fontFamily: Fonts?.rounded,
-              letterSpacing: 0.1,
+              fontFamily: Fonts.display.bold,
+              letterSpacing: -0.2,
             }}>
             {label}
           </Text>

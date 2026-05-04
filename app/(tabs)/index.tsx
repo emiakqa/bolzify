@@ -7,20 +7,19 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SectionHeader } from '@/components/ui/section-header';
+import { TeamFlag } from '@/components/ui/team-flag';
 import {
   Colors,
   FontSize,
-  FontWeight,
   Fonts,
   LetterSpacing,
   LineHeight,
@@ -39,11 +38,15 @@ type Match = {
   kickoff_at: string;
   home_team: string;
   away_team: string;
+  home_team_id: number | null;
+  away_team_id: number | null;
   stage: string | null;
   status: string;
   home_goals: number | null;
   away_goals: number | null;
 };
+
+type TeamLogos = { home: string | null; away: string | null };
 
 type Tip = {
   match_id: number;
@@ -70,44 +73,30 @@ export default function HomeScreen() {
 
   const [nextMatch, setNextMatch] = useState<Match | null>(null);
   const [nextMatchTip, setNextMatchTip] = useState<Tip | null>(null);
+  const [logos, setLogos] = useState<TeamLogos>({ home: null, away: null });
   const [myLeagues, setMyLeagues] = useState<LeaguePreview[]>([]);
   const [specialStatus, setSpecialStatus] = useState<SpecialTipsStatus>({ filled: 0, total: 5 });
-  const [specialPoints, setSpecialPoints] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(Date.now());
 
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
-    const t0 = Date.now();
-    console.log('[Home] load() start, userId=', userId);
-    // Tournament-Filter zwingend — sonst zieht der "letztes finished"-Fallback
-    // Daten anderer Turniere ins Frontend, falls das aktive Turnier noch keine
-    // gespielten Matches hat.
     const tournament = await getCurrentTournament();
-    const { data: matches, error: mErr } = await supabase
+    const { data: matches } = await supabase
       .from('matches')
-      .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+      .select('id, kickoff_at, home_team, away_team, home_team_id, away_team_id, stage, status, home_goals, away_goals')
       .eq('tournament', tournament)
       .eq('status', 'scheduled')
       .gt('kickoff_at', new Date().toISOString())
       .order('kickoff_at', { ascending: true })
       .limit(1);
-    console.log(
-      '[Home] matches query done after',
-      Date.now() - t0,
-      'ms, rows=',
-      matches?.length ?? 0,
-      'err=',
-      mErr?.message,
-    );
 
-    const m = matches?.[0] ?? null;
-    let finalMatch = m;
+    let finalMatch = matches?.[0] ?? null;
     if (!finalMatch) {
       const { data: last } = await supabase
         .from('matches')
-        .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+        .select('id, kickoff_at, home_team, away_team, home_team_id, away_team_id, stage, status, home_goals, away_goals')
         .eq('tournament', tournament)
         .eq('status', 'finished')
         .order('kickoff_at', { ascending: false })
@@ -117,7 +106,7 @@ export default function HomeScreen() {
     if (!finalMatch) {
       const { data: first } = await supabase
         .from('matches')
-        .select('id, kickoff_at, home_team, away_team, stage, status, home_goals, away_goals')
+        .select('id, kickoff_at, home_team, away_team, home_team_id, away_team_id, stage, status, home_goals, away_goals')
         .eq('tournament', tournament)
         .order('kickoff_at', { ascending: true })
         .limit(1);
@@ -135,6 +124,21 @@ export default function HomeScreen() {
       setNextMatchTip(tip ?? null);
     } else {
       setNextMatchTip(null);
+    }
+
+    // Team-Logos für Hero-Match (FIFA-Verbandswappen aus api-football)
+    if (finalMatch && finalMatch.home_team_id && finalMatch.away_team_id) {
+      const { data: teamRows } = await supabase
+        .from('teams')
+        .select('id, logo_url')
+        .in('id', [finalMatch.home_team_id, finalMatch.away_team_id]);
+      const homeLogo =
+        teamRows?.find((t) => t.id === finalMatch.home_team_id)?.logo_url ?? null;
+      const awayLogo =
+        teamRows?.find((t) => t.id === finalMatch.away_team_id)?.logo_url ?? null;
+      setLogos({ home: homeLogo, away: awayLogo });
+    } else {
+      setLogos({ home: null, away: null });
     }
 
     if (userId) {
@@ -158,14 +162,6 @@ export default function HomeScreen() {
       } else {
         setSpecialStatus({ filled: 0, total: 5 });
       }
-
-      const { data: scoredSpecial } = await supabase
-        .from('scored_special_tips')
-        .select('total_points')
-        .eq('user_id', userId)
-        .eq('tournament', tournament)
-        .maybeSingle();
-      setSpecialPoints(scoredSpecial?.total_points ?? null);
     }
 
     if (userId) {
@@ -214,43 +210,38 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  const initials = (profile?.username ?? '??').slice(0, 2).toUpperCase();
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={c.textMuted}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
         }>
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <ThemedText
+            <Text
               style={{
                 color: c.textMuted,
-                fontSize: FontSize.sm,
-                lineHeight: LineHeight.sm,
-                fontFamily: Fonts?.rounded,
-                fontWeight: FontWeight.medium,
+                fontSize: 14,
+                fontFamily: Fonts.body.medium,
               }}>
-              Moin
-            </ThemedText>
-            <ThemedText
+              Servus
+            </Text>
+            <Text
               style={{
                 color: c.text,
                 fontSize: FontSize.display,
                 lineHeight: LineHeight.display,
-                fontFamily: Fonts?.rounded,
-                fontWeight: FontWeight.heavy,
+                fontFamily: Fonts.display.bold,
                 letterSpacing: LetterSpacing.display,
                 marginTop: 2,
               }}>
               @{profile?.username ?? '—'}
-            </ThemedText>
+            </Text>
           </View>
           <Pressable
             onPress={() => router.push('/settings')}
@@ -258,8 +249,7 @@ export default function HomeScreen() {
             style={({ pressed }) => [
               styles.avatarBtn,
               {
-                borderColor: c.borderStrong,
-                backgroundColor: c.surface,
+                backgroundColor: c.warmSoft,
                 opacity: pressed ? 0.7 : 1,
                 transform: [{ scale: pressed ? 0.94 : 1 }],
               },
@@ -271,102 +261,130 @@ export default function HomeScreen() {
                 contentFit="cover"
               />
             ) : (
-              <IconSymbol name="gearshape.fill" size={22} color={c.textMuted} />
+              <Text style={{ color: c.warm, fontFamily: Fonts.display.bold, fontSize: 17 }}>
+                {initials}
+              </Text>
             )}
           </Pressable>
         </View>
 
-        {/* Hero: Next Match */}
-        <SectionHeader
-          title={nextMatch?.status === 'finished' ? 'Letztes Ergebnis' : 'Nächstes Match'}
-          marginTop={Spacing.lg}
-        />
+        {/* Live-Ticker (Mono Pulse) */}
+        {nextMatch && nextMatch.status !== 'finished' ? (
+          <View style={[styles.tickerBar, { backgroundColor: c.surface }]}>
+            <View style={[styles.pulseDot, { backgroundColor: c.warm }]} />
+            <Text
+              style={{
+                color: c.text,
+                fontFamily: Fonts.mono.semibold,
+                fontSize: 11,
+                letterSpacing: 0.6,
+              }}>
+              {formatCountdown(nextMatch.kickoff_at, now)}
+            </Text>
+            <Text style={{ color: c.textFaint }}>·</Text>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts.mono.regular,
+                fontSize: 11,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+              }}
+              numberOfLines={1}>
+              bis Anpfiff {(nextMatch.home_team ?? '').slice(0, 3)}–{(nextMatch.away_team ?? '').slice(0, 3)}
+            </Text>
+          </View>
+        ) : null}
 
+        {/* Match-Hero (Score-as-Hero) */}
         {loading ? (
-          <Card>
+          <Card padding="lg" style={{ marginTop: Spacing.md }}>
             <ActivityIndicator color={c.textMuted} />
           </Card>
         ) : !nextMatch ? (
-          <Card>
-            <ThemedText style={{ color: c.textMuted }}>
+          <Card padding="lg" style={{ marginTop: Spacing.md }}>
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
               Noch keine Matches in der DB.
-            </ThemedText>
+            </Text>
           </Card>
         ) : (
-          <MatchHero
-            match={nextMatch}
-            tip={nextMatchTip}
-            now={now}
-            c={c}
-            onPress={() =>
-              router.push({
-                pathname: '/tip/[matchId]',
-                params: { matchId: String(nextMatch.id) },
-              })
-            }
-          />
+          <View style={{ marginTop: Spacing.md }}>
+            <MatchHero
+              match={nextMatch}
+              tip={nextMatchTip}
+              logos={logos}
+              now={now}
+              c={c}
+              onPress={() =>
+                router.push({
+                  pathname: '/tip/[matchId]',
+                  params: { matchId: String(nextMatch.id) },
+                })
+              }
+            />
+          </View>
         )}
 
-        {/* Sondertipps */}
-        <SectionHeader title="Sondertipps" />
+        {/* Sondertipps (warm) */}
         <Card
-          variant={specialStatus.filled > 0 ? 'accent' : 'default'}
-          onPress={() => router.push('/special-tips')}>
+          variant="warm"
+          padding="md"
+          onPress={() => router.push('/special-tips')}
+          style={{ marginTop: Spacing.md }}>
           <View style={styles.specialInner}>
+            <View style={[styles.specialIcon, { backgroundColor: c.warm }]}>
+              <Text style={{ color: c.warmFg, fontFamily: Fonts.display.bold, fontSize: 20 }}>
+                ★
+              </Text>
+            </View>
             <View style={{ flex: 1 }}>
-              <ThemedText
+              <Text
                 style={{
                   color: c.text,
-                  fontSize: FontSize.md,
-                  fontFamily: Fonts?.rounded,
-                  fontWeight: FontWeight.semibold,
+                  fontFamily: Fonts.display.bold,
+                  fontSize: 15,
+                  letterSpacing: -0.3,
                 }}>
-                Weltmeister · Finalist · Torschützenkönig
-              </ThemedText>
-              <ThemedText
+                Sondertipps
+              </Text>
+              <Text
                 style={{
                   color: c.textMuted,
-                  fontSize: FontSize.sm,
-                  marginTop: 4,
+                  fontFamily: Fonts.mono.regular,
+                  fontSize: 12,
+                  letterSpacing: 0.4,
+                  marginTop: 2,
                 }}>
-                {specialStatus.filled === 0
-                  ? 'Noch nicht getippt — vor Turnierstart abgeben'
-                  : specialStatus.filled === specialStatus.total
-                    ? '✓ Alle Sondertipps abgegeben'
-                    : `${specialStatus.filled} von ${specialStatus.total} Feldern ausgefüllt`}
-              </ThemedText>
+                {specialStatus.filled}/{specialStatus.total} ABGEGEBEN · VOR ANPFIFF
+              </Text>
             </View>
-            {specialPoints !== null && specialPoints > 0 ? (
-              <Badge label={`${specialPoints} Pkt`} tone="accent" />
-            ) : null}
-            <ThemedText
-              style={{
-                color: c.textFaint,
-                fontSize: FontSize.xl,
-                fontWeight: FontWeight.regular,
-              }}>
-              ›
-            </ThemedText>
+            <Text style={{ color: c.warm, fontSize: 22 }}>›</Text>
           </View>
         </Card>
 
         {/* Ligen */}
         <SectionHeader
           title="Deine Ligen"
-          action={{ label: 'Alle', onPress: () => router.push('/(tabs)/leagues') }}
+          marginTop={Spacing.lg}
+          action={
+            myLeagues.length > 0
+              ? { label: 'Alle', onPress: () => router.push('/(tabs)/leagues') }
+              : undefined
+          }
         />
 
         {myLeagues.length === 0 ? (
           <Card padding="lg">
-            <ThemedText
+            <Text
               style={{
                 color: c.textMuted,
-                textAlign: 'center',
-                fontSize: FontSize.md,
+                fontFamily: Fonts.body.regular,
+                fontSize: 14,
                 lineHeight: 22,
+                textAlign: 'center',
               }}>
               Noch keine Liga.{'\n'}Leg eine an oder tritt per Code bei.
-            </ThemedText>
+            </Text>
             <View style={styles.ctaRow}>
               <Button
                 label="Liga erstellen"
@@ -393,46 +411,42 @@ export default function HomeScreen() {
                 onPress={() => router.push({ pathname: '/leagues/[id]', params: { id: l.id } })}
                 padding="md">
                 <View style={styles.ligaInner}>
-                  <View
-                    style={[
-                      styles.ligaIcon,
-                      { backgroundColor: c.accentSoft },
-                    ]}>
-                    <IconSymbol name="person.3.fill" size={18} color={c.accent} />
+                  <View style={[styles.ligaIcon, { backgroundColor: c.accentSoft }]}>
+                    <Text
+                      style={{ color: c.accent, fontFamily: Fonts.display.bold, fontSize: 15 }}>
+                      {l.name.slice(0, 2).toUpperCase()}
+                    </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <ThemedText
+                    <Text
                       style={{
                         color: c.text,
-                        fontSize: FontSize.md,
-                        fontFamily: Fonts?.rounded,
-                        fontWeight: FontWeight.semibold,
+                        fontSize: 16,
+                        fontFamily: Fonts.display.bold,
+                        letterSpacing: -0.3,
                       }}>
                       {l.name}
-                    </ThemedText>
-                    <ThemedText
+                    </Text>
+                    <Text
                       style={{
                         color: c.textMuted,
-                        fontSize: FontSize.sm,
+                        fontSize: 11,
+                        fontFamily: Fonts.mono.semibold,
+                        letterSpacing: 0.4,
+                        textTransform: 'uppercase',
                         marginTop: 2,
                       }}>
                       {l.member_count} {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'}
-                    </ThemedText>
+                    </Text>
                   </View>
-                  <ThemedText
-                    style={{
-                      color: c.textFaint,
-                      fontSize: FontSize.xl,
-                    }}>
-                    ›
-                  </ThemedText>
+                  <Text style={{ color: c.textFaint, fontSize: 18 }}>›</Text>
                 </View>
               </Card>
             ))}
           </View>
         )}
 
-        <ThemedText style={[styles.footer, { color: c.textFaint }]}>{user?.email}</ThemedText>
+        <Text style={[styles.footer, { color: c.textFaint }]}>{user?.email}</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -441,177 +455,105 @@ export default function HomeScreen() {
 function MatchHero({
   match,
   tip,
+  logos,
   now,
   c,
   onPress,
 }: {
   match: Match;
   tip: Tip | null;
+  logos: TeamLogos;
   now: number;
-  c: (typeof Colors)['dark'];
+  c: (typeof Colors)['light'];
   onPress: () => void;
 }) {
   const countdown = formatCountdown(match.kickoff_at, now);
   const isFinished =
     match.status === 'finished' && match.home_goals !== null && match.away_goals !== null;
 
-  let tipOutcome: 'exact' | 'diff' | 'trend' | 'miss' | null = null;
-  if (isFinished && tip) {
-    const hg = match.home_goals!;
-    const ag = match.away_goals!;
-    if (tip.home_goals === hg && tip.away_goals === ag) tipOutcome = 'exact';
-    else if (tip.home_goals - tip.away_goals === hg - ag) tipOutcome = 'diff';
-    else if (Math.sign(tip.home_goals - tip.away_goals) === Math.sign(hg - ag))
-      tipOutcome = 'trend';
-    else tipOutcome = 'miss';
-  }
+  // Hero-Score: realer Score wenn finished, Tipp wenn schon getippt, sonst —
+  const heroH = isFinished ? match.home_goals : tip?.home_goals;
+  const heroA = isFinished ? match.away_goals : tip?.away_goals;
 
   return (
-    <Card variant="elevated" onPress={onPress} padding="lg">
+    <Card variant="elevated" onPress={onPress} padding="md">
       <View style={styles.heroTop}>
         <Badge label={match.stage ?? 'TBD'} tone="neutral" />
         {isFinished ? (
-          <Badge label="Beendet" tone="neutral" />
+          <Badge label="BEENDET" tone="neutral" />
         ) : (
-          <Badge label={countdown} tone="accent" />
+          <Badge label={`► ${countdown}`} tone="warm" />
         )}
       </View>
 
       <View style={styles.heroTeams}>
-        <View style={styles.teamWrap}>
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.lg,
-              lineHeight: LineHeight.lg,
-              fontFamily: Fonts?.rounded,
-              fontWeight: FontWeight.bold,
-              textAlign: 'center',
-            }}>
-            {deName(match.home_team)}
-          </ThemedText>
+        <TeamPole c={c} name={deName(match.home_team)} logo={logos.home} />
+        <View style={styles.scoreWrap}>
+          <Text style={[styles.scoreNum, { color: c.text, fontFamily: Fonts.display.bold }]}>
+            {heroH ?? '—'}
+          </Text>
+          <Text
+            style={[styles.scoreColon, { color: c.textFaint, fontFamily: Fonts.display.bold }]}>
+            :
+          </Text>
+          <Text style={[styles.scoreNum, { color: c.text, fontFamily: Fonts.display.bold }]}>
+            {heroA ?? '—'}
+          </Text>
         </View>
-        {isFinished ? (
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.jumbo,
-              lineHeight: LineHeight.jumbo,
-              fontFamily: Fonts?.rounded,
-              fontWeight: FontWeight.heavy,
-              letterSpacing: LetterSpacing.display,
-              minWidth: 100,
-              textAlign: 'center',
-            }}>
-            {match.home_goals}:{match.away_goals}
-          </ThemedText>
-        ) : (
-          <View style={[styles.vsCircle, { backgroundColor: c.accentSoft }]}>
-            <ThemedText
-              style={{
-                color: c.accent,
-                fontSize: FontSize.sm,
-                lineHeight: LineHeight.sm,
-                fontFamily: Fonts?.rounded,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              }}>
-              VS
-            </ThemedText>
-          </View>
-        )}
-        <View style={styles.teamWrap}>
-          <ThemedText
-            style={{
-              color: c.text,
-              fontSize: FontSize.lg,
-              lineHeight: LineHeight.lg,
-              fontFamily: Fonts?.rounded,
-              fontWeight: FontWeight.bold,
-              textAlign: 'center',
-            }}>
-            {deName(match.away_team)}
-          </ThemedText>
-        </View>
+        <TeamPole c={c} name={deName(match.away_team)} logo={logos.away} />
       </View>
 
-      <ThemedText
-        style={{
-          color: c.textMuted,
-          fontSize: FontSize.sm,
-          textAlign: 'center',
-        }}>
-        {formatKickoffDate(match.kickoff_at)} · {formatKickoffTime(match.kickoff_at)}
-      </ThemedText>
-
-      {/* CTA-Pill am unteren Card-Rand */}
-      <View style={styles.heroCta}>
-        {isFinished ? (
-          tip ? (
-            <View
-              style={[
-                styles.ctaPill,
-                {
-                  backgroundColor:
-                    tipOutcome === 'miss' ? c.surfaceElevated : c.accentSoft,
-                  borderColor: tipOutcome === 'miss' ? c.border : c.accentBorder,
-                },
-              ]}>
-              <ThemedText
-                style={{
-                  color: tipOutcome === 'miss' ? c.textMuted : c.accent,
-                  fontFamily: Fonts?.rounded,
-                  fontWeight: FontWeight.semibold,
-                  fontSize: FontSize.md,
-                }}>
-                Dein Tipp: {tip.home_goals}:{tip.away_goals}
-                {tipOutcome === 'exact'
-                  ? '  ✓ exakt'
-                  : tipOutcome === 'diff'
-                    ? '  ✓ Differenz'
-                    : tipOutcome === 'trend'
-                      ? '  ✓ Tendenz'
-                      : ''}
-              </ThemedText>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.ctaPill,
-                { backgroundColor: c.surfaceElevated, borderColor: c.border },
-              ]}>
-              <ThemedText
-                style={{
-                  color: c.textMuted,
-                  fontFamily: Fonts?.rounded,
-                  fontWeight: FontWeight.semibold,
-                  fontSize: FontSize.md,
-                }}>
-                Kein Tipp abgegeben
-              </ThemedText>
-            </View>
-          )
-        ) : (
-          <View
-            style={[
-              styles.ctaPill,
-              tip
-                ? { backgroundColor: c.surfaceElevated, borderColor: c.border }
-                : { backgroundColor: c.accent, borderColor: c.accent },
-            ]}>
-            <ThemedText
-              style={{
-                color: tip ? c.text : c.accentFg,
-                fontFamily: Fonts?.rounded,
-                fontWeight: FontWeight.bold,
-                fontSize: FontSize.md,
-              }}>
-              {tip ? `Dein Tipp: ${tip.home_goals}:${tip.away_goals}` : 'Jetzt tippen →'}
-            </ThemedText>
-          </View>
-        )}
+      <View style={[styles.heroFooter, { borderTopColor: c.divider }]}>
+        <Text
+          style={{
+            color: c.textMuted,
+            fontFamily: Fonts.mono.semibold,
+            fontSize: 11,
+            letterSpacing: 0.4,
+            textTransform: 'uppercase',
+          }}>
+          {formatKickoffDate(match.kickoff_at)} · {formatKickoffTime(match.kickoff_at)}
+        </Text>
+        <Text
+          style={{
+            color: tip ? c.accent : c.warm,
+            fontFamily: Fonts.mono.bold,
+            fontSize: 11,
+            letterSpacing: 0.4,
+            textTransform: 'uppercase',
+          }}>
+          {tip ? 'DEIN TIPP · GESPEICHERT ✓' : 'JETZT TIPPEN ›'}
+        </Text>
       </View>
     </Card>
+  );
+}
+
+function TeamPole({
+  c,
+  name,
+  logo,
+}: {
+  c: (typeof Colors)['light'];
+  name: string;
+  logo: string | null;
+}) {
+  return (
+    <View style={styles.teamPole}>
+      <TeamFlag logoUrl={logo} size={56} />
+      <Text
+        numberOfLines={1}
+        style={{
+          color: c.text,
+          fontFamily: Fonts.display.bold,
+          fontSize: 15,
+          letterSpacing: -0.3,
+          marginTop: 8,
+          textAlign: 'center',
+        }}>
+        {name}
+      </Text>
+    </View>
   );
 }
 
@@ -626,15 +568,27 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   avatarBtn: {
-    width: 48,
-    height: 48,
+    width: 46,
+    height: 46,
     borderRadius: Radius.pill,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatarImg: { width: '100%', height: '100%' },
+  tickerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  pulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+  },
   ctaRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
@@ -645,15 +599,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
   },
+  specialIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ligaInner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
   },
   ligaIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -661,38 +622,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 14,
   },
   heroTeams: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: Spacing.md,
-    gap: Spacing.sm,
+    justifyContent: 'space-around',
+    gap: 4,
   },
-  teamWrap: {
-    flex: 1,
-  },
-  vsCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.pill,
+  teamPole: { flex: 1, alignItems: 'center' },
+  scoreWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
   },
-  heroCta: {
-    marginTop: Spacing.md,
+  scoreNum: {
+    fontSize: 48,
+    letterSpacing: -2,
+    lineHeight: 50,
   },
-  ctaPill: {
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+  scoreColon: {
+    fontSize: 30,
+    lineHeight: 50,
+  },
+  heroFooter: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   footer: {
     marginTop: Spacing.xxl,
     fontSize: FontSize.xs,
+    fontFamily: Fonts.body.regular,
     textAlign: 'center',
   },
 });

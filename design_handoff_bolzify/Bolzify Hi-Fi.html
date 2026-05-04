@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bolzify · Hi-Fi (Bolzplatz Direction)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; background: #1A1818; color: #fff; font-family: 'Geist', system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="bolzplatz/tokens.jsx"></script>
+<script type="text/babel" src="bolzplatz/primitives.jsx"></script>
+<script type="text/babel" src="bolzplatz/screen-home.jsx"></script>
+<script type="text/babel" src="bolzplatz/screen-matches.jsx"></script>
+<script type="text/babel" src="bolzplatz/screen-special.jsx"></script>
+<script type="text/babel" src="bolzplatz/screens-misc.jsx"></script>
+<script type="text/babel" src="bolzplatz/screen-tip.jsx"></script>
+<script type="text/babel" src="bolzplatz/screen-league-detail.jsx"></script>
+<script type="text/babel" src="bolzplatz/screen-settings.jsx"></script>
+<script type="text/babel" src="bolzplatz/screen-v016.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+function Swatch({ color, label, dark }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: 32, height: 32, borderRadius: 8, background: color, boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.10)" }} />
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: dark ? "rgba(255,255,255,0.6)" : "rgba(15,30,20,0.55)" }}>
+        <div style={{ fontWeight: 700, color: dark ? "#fff" : "#0F1A12" }}>{label}</div>
+        <div>{color}</div>
+      </div>
+    </div>
+  );
+}
+
+function TokenSheet() {
+  const t = window.bolzTokens.light;
+  return (
+    <div style={{
+      width: 1200, padding: 40, background: "#FBF8F1", color: "#0F1A12",
+      fontFamily: "'Geist', system-ui, sans-serif",
+    }}>
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.6, textTransform: "uppercase", color: "#5C6B62", marginBottom: 8, fontWeight: 700 }}>
+        Tokens · Bolzplatz v1
+      </div>
+      <h1 style={{ margin: "0 0 6px", fontFamily: "'Familjen Grotesk', sans-serif", fontSize: 48, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1.05 }}>
+        Eine Direction. Zwei Schemes.
+      </h1>
+      <p style={{ margin: "0 0 28px", fontSize: 15, lineHeight: 1.6, maxWidth: 780, color: "#2A332D" }}>
+        Bolzplatz-Sommer (02) als Basis: warmer Off-White, Schatten statt Border, große Radien, Familjen Grotesk Display.
+        Aus Stadion-Nacht (01) kombiniert: <strong>JetBrains Mono</strong> für Daten/Meta, <strong>Score-as-Hero</strong> auf Match-Cards,
+        Live-Ticker als Mini-Bar, OLED-Dark als Variante. Tor-Orange (#E8744E) als zweiter Akzent für Sondertipps/Streaks/Live — gibt der App eine zweite emotionale Note.
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginBottom: 36 }}>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "#5C6B62", fontWeight: 700, marginBottom: 12 }}>Light · Primary Scheme</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Swatch color="#F4F1EA" label="bg / paper" />
+            <Swatch color="#FFFFFF" label="surface" />
+            <Swatch color="#15803D" label="accent · Bolzplatz" />
+            <Swatch color="#E8F4EC" label="accent soft" />
+            <Swatch color="#E8744E" label="warm · Tor-Orange" />
+            <Swatch color="#FBE8DD" label="warm soft" />
+            <Swatch color="#0E1A12" label="text" />
+            <Swatch color="#5C6B62" label="text muted" />
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "#5C6B62", fontWeight: 700, marginBottom: 12 }}>Dark · Variant</div>
+          <div style={{ background: "#0E1416", padding: 16, borderRadius: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Swatch dark color="#06090A" label="bg / OLED" />
+            <Swatch dark color="#0E1416" label="surface" />
+            <Swatch dark color="#22C55E" label="accent · Bolzplatz" />
+            <Swatch dark color="rgba(34,197,94,0.14)" label="accent soft" />
+            <Swatch dark color="#E8744E" label="warm · Tor-Orange" />
+            <Swatch dark color="rgba(232,116,78,0.16)" label="warm soft" />
+            <Swatch dark color="#ECF1F0" label="text" />
+            <Swatch dark color="#7A8A86" label="text muted" />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, marginBottom: 36 }}>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "#5C6B62", fontWeight: 700, marginBottom: 10 }}>Display · Familjen Grotesk</div>
+          <div style={{ fontFamily: "'Familjen Grotesk', sans-serif", fontSize: 56, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1 }}>Anpfiff</div>
+          <div style={{ fontSize: 13, color: "#5C6B62", marginTop: 8, lineHeight: 1.5 }}>Headlines, Score, Buttons, Tab-Labels. Heavy 800 für Display, 700 für Components.</div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "#5C6B62", fontWeight: 700, marginBottom: 10 }}>Body · Geist</div>
+          <div style={{ fontFamily: "'Geist', sans-serif", fontSize: 36, fontWeight: 500, letterSpacing: -0.5, lineHeight: 1.15 }}>Tipp jetzt vor Anpfiff.</div>
+          <div style={{ fontSize: 13, color: "#5C6B62", marginTop: 8, lineHeight: 1.5 }}>Fließtext, Beschreibungen, Eingaben. 400/500/600.</div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "#5C6B62", fontWeight: 700, marginBottom: 10 }}>Mono · JetBrains</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 28, fontWeight: 700, letterSpacing: 0.4 }}>T-39d 10h</div>
+          <div style={{ fontSize: 13, color: "#5C6B62", marginTop: 8, lineHeight: 1.5 }}>Daten, Codes, Punkte, Section-Labels (UPPERCASE). Stimme der App.</div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "#5C6B62", fontWeight: 700, marginBottom: 10 }}>Radius</div>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+            {[{n:"sm",v:10},{n:"md",v:14},{n:"lg",v:20},{n:"xl",v:24},{n:"xxl",v:32},{n:"pill",v:999}].map(r => (
+              <div key={r.n} style={{ textAlign: "center" }}>
+                <div style={{ width: 56, height: 56, background: "#15803D", borderRadius: r.v }} />
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, marginTop: 6, color: "#5C6B62" }}>{r.n}</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#9AA89F" }}>{r.v === 999 ? "∞" : r.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: "#5C6B62", fontWeight: 700, marginBottom: 10 }}>Shadow</div>
+          <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+            {[{n:"sm",s:"0 1px 2px rgba(15,30,20,0.05),0 1px 3px rgba(15,30,20,0.04)"},{n:"md",s:"0 4px 14px rgba(15,30,20,0.07),0 1px 3px rgba(15,30,20,0.04)"},{n:"lg",s:"0 12px 32px rgba(15,30,20,0.12),0 2px 6px rgba(15,30,20,0.05)"}].map(sh => (
+              <div key={sh.n} style={{ textAlign: "center" }}>
+                <div style={{ width: 64, height: 64, background: "#fff", borderRadius: 14, boxShadow: sh.s }} />
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, marginTop: 8, color: "#5C6B62" }}>{sh.n}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Phone({ Comp, scheme = "light" }) {
+  const dark = scheme === "dark";
+  return (
+    <window.IOSDevice width={402} height={874} dark={dark}>
+      <Comp scheme={scheme} />
+    </window.IOSDevice>
+  );
+}
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "version": "neu",
+  "scheme": "light",
+  "screen": "Home",
+  "showOld": true
+}/*EDITMODE-END*/;
+
+const SCREEN_MAP = {
+  Home: { neu: "HomeScreen", alt: "V016HomeScreen" },
+  Spielplan: { neu: "MatchesScreen" },
+  "Meine Tipps": { neu: "MyTipsScreen" },
+  Ligen: { neu: "LeaguesScreen" },
+  Sondertipps: { neu: "SpecialTipsScreen" },
+  "Tip-Eingabe": { neu: "TipScreen" },
+  "Liga-Detail": { neu: "LeagueDetailScreen" },
+  Einstellungen: { neu: "SettingsScreen" },
+  Postfach: { neu: "InboxScreen" },
+  Composer: { neu: "ComposerScreen" },
+};
+
+function ABStage() {
+  const [t, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
+  const map = SCREEN_MAP[t.screen] || SCREEN_MAP.Home;
+  const NeuComp = window[map.neu];
+  const AltComp = map.alt ? window[map.alt] : null;
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: "#0F1212", padding: "40px 24px 80px",
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 20,
+    }}>
+      <div style={{
+        textAlign: "center", color: "#fff",
+        fontFamily: "'Familjen Grotesk', sans-serif",
+      }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700,
+          letterSpacing: 1.6, color: "#7A8A86", textTransform: "uppercase",
+        }}>Bolzify · Live A/B</div>
+        <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.8, marginTop: 4 }}>
+          {t.screen}
+        </div>
+        <div style={{ fontSize: 13, color: "#7A8A86", marginTop: 4, fontFamily: "'Geist', sans-serif" }}>
+          {t.showOld && AltComp ? "NEU (Bolzplatz) · vs · v0.16" : "Solo · " + (t.version === "alt" && AltComp ? "v0.16" : "Bolzplatz")}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 36, flexWrap: "wrap", justifyContent: "center" }}>
+        {(t.showOld && AltComp) ? (
+          <>
+            <Labeled label="NEU · Bolzplatz">
+              <Phone Comp={NeuComp} scheme={t.scheme} />
+            </Labeled>
+            <Labeled label="v0.16">
+              <Phone Comp={AltComp} scheme={t.scheme} />
+            </Labeled>
+          </>
+        ) : (
+          <Labeled label={t.version === "alt" && AltComp ? "v0.16" : "NEU · Bolzplatz"}>
+            <Phone Comp={t.version === "alt" && AltComp ? AltComp : NeuComp} scheme={t.scheme} />
+          </Labeled>
+        )}
+      </div>
+
+      <a href="#" onClick={(e) => { e.preventDefault(); window.__showCanvas(); }}
+         style={{
+           color: "#7A8A86", fontFamily: "'JetBrains Mono', monospace",
+           fontSize: 11, letterSpacing: 1, textDecoration: "none", marginTop: 8,
+         }}>
+        ← ALLE ARTBOARDS
+      </a>
+
+      <window.TweaksPanel title="Bolzify Tweaks">
+        <window.TweakSection label="Screen" />
+        <window.TweakSelect label="Screen" value={t.screen}
+          options={Object.keys(SCREEN_MAP)}
+          onChange={(v) => setTweak("screen", v)} />
+        <window.TweakRadio label="Theme" value={t.scheme}
+          options={["light", "dark"]}
+          onChange={(v) => setTweak("scheme", v)} />
+
+        <window.TweakSection label="Vergleich" />
+        <window.TweakToggle label="Side-by-Side mit v0.16" value={t.showOld && !!AltComp}
+          onChange={(v) => setTweak("showOld", v)} />
+        {!t.showOld ? (
+          <window.TweakRadio label="Welche Version" value={t.version}
+            options={AltComp ? ["neu", "alt"] : ["neu"]}
+            onChange={(v) => setTweak("version", v)} />
+        ) : null}
+        {!AltComp ? (
+          <div style={{
+            padding: "8px 12px", fontSize: 11, color: "#888",
+            fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0.4,
+          }}>v0.16-Referenz nur für „Home" hinterlegt.</div>
+        ) : null}
+      </window.TweaksPanel>
+    </div>
+  );
+}
+
+function Labeled({ label, children }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700,
+        letterSpacing: 1.4, color: "#7A8A86", textTransform: "uppercase",
+      }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  const [mode, setMode] = React.useState("ab");
+  React.useEffect(() => {
+    window.__showCanvas = () => setMode("canvas");
+    window.__showAB = () => setMode("ab");
+  }, []);
+
+  if (mode === "ab") {
+    return (
+      <div style={{ position: "relative" }}>
+        <ABStage />
+        <button onClick={() => setMode("canvas")} style={{
+          position: "fixed", top: 16, right: 16, zIndex: 10,
+          background: "#1B221E", color: "#fff", border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 999, padding: "8px 14px", fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11, fontWeight: 700, letterSpacing: 0.6, cursor: "pointer",
+        }}>CANVAS →</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setMode("ab")} style={{
+        position: "fixed", top: 16, right: 16, zIndex: 10,
+        background: "#1B221E", color: "#fff", border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 999, padding: "8px 14px", fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 11, fontWeight: 700, letterSpacing: 0.6, cursor: "pointer",
+      }}>← LIVE A/B</button>
+    <window.DesignCanvas title="Bolzify · Bolzplatz Hi-Fi" subtitle="Light primary, Dark variant, Tor-Orange als zweiter Akzent" background="#0F1212">
+      <window.DCSection id="system" title="Design System">
+        <window.DCArtboard id="tokens" label="Tokens · Farbe / Typo / Radius / Shadow" width={1280} height={760}>
+          <TokenSheet />
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="hauptscreens" title="Hauptscreens · Light">
+        <window.DCArtboard id="home-l" label="Home" width={420} height={900}>
+          <Phone Comp={window.HomeScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="matches-l" label="Spielplan" width={420} height={900}>
+          <Phone Comp={window.MatchesScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="mytips-l" label="Meine Tipps" width={420} height={900}>
+          <Phone Comp={window.MyTipsScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="leagues-l" label="Ligen" width={420} height={900}>
+          <Phone Comp={window.LeaguesScreen} scheme="light" />
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="flows" title="Sondertipps + Postfach">
+        <window.DCArtboard id="special-l" label="Sondertipps (entstopft)" width={420} height={900}>
+          <Phone Comp={window.SpecialTipsScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="inbox-l" label="Postfach" width={420} height={900}>
+          <Phone Comp={window.InboxScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="composer-l" label="Broadcast Composer" width={420} height={900}>
+          <Phone Comp={window.ComposerScreen} scheme="light" />
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="details" title="Detail-Screens">
+        <window.DCArtboard id="tip-l" label="Tip-Eingabe (Match)" width={420} height={900}>
+          <Phone Comp={window.TipScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="league-l" label="Liga-Detail (Tabelle)" width={420} height={900}>
+          <Phone Comp={window.LeagueDetailScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="settings-l" label="Einstellungen" width={420} height={900}>
+          <Phone Comp={window.SettingsScreen} scheme="light" />
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="dark" title="Dark Variant">
+        <window.DCArtboard id="home-d" label="Home · Dark" width={420} height={900}>
+          <Phone Comp={window.HomeScreen} scheme="dark" />
+        </window.DCArtboard>
+        <window.DCArtboard id="matches-d" label="Spielplan · Dark" width={420} height={900}>
+          <Phone Comp={window.MatchesScreen} scheme="dark" />
+        </window.DCArtboard>
+        <window.DCArtboard id="special-d" label="Sondertipps · Dark" width={420} height={900}>
+          <Phone Comp={window.SpecialTipsScreen} scheme="dark" />
+        </window.DCArtboard>
+        <window.DCArtboard id="tip-d" label="Tip-Eingabe · Dark" width={420} height={900}>
+          <Phone Comp={window.TipScreen} scheme="dark" />
+        </window.DCArtboard>
+        <window.DCArtboard id="league-d" label="Liga-Detail · Dark" width={420} height={900}>
+          <Phone Comp={window.LeagueDetailScreen} scheme="dark" />
+        </window.DCArtboard>
+        <window.DCArtboard id="settings-d" label="Einstellungen · Dark" width={420} height={900}>
+          <Phone Comp={window.SettingsScreen} scheme="dark" />
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="ab" title="A/B · Bolzplatz vs. v0.16">
+        <window.DCArtboard id="ab-new-l" label="NEU · Bolzplatz · Light" width={420} height={900}>
+          <Phone Comp={window.HomeScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="ab-old-l" label="v0.16 · Light" width={420} height={900}>
+          <Phone Comp={window.V016HomeScreen} scheme="light" />
+        </window.DCArtboard>
+        <window.DCArtboard id="ab-new-d" label="NEU · Bolzplatz · Dark" width={420} height={900}>
+          <Phone Comp={window.HomeScreen} scheme="dark" />
+        </window.DCArtboard>
+        <window.DCArtboard id="ab-old-d" label="v0.16 · Dark" width={420} height={900}>
+          <Phone Comp={window.V016HomeScreen} scheme="dark" />
+        </window.DCArtboard>
+      </window.DCSection>
+    </window.DesignCanvas>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

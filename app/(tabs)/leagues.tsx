@@ -5,23 +5,17 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import {
   Colors,
-  FontSize,
-  FontWeight,
   Fonts,
   LetterSpacing,
-  LineHeight,
-  Radius,
   Spacing,
 } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -34,6 +28,10 @@ type LeagueRow = {
   invite_code: string;
   created_by: string;
   member_count: number;
+  my_rank: number | null;
+  my_points: number;
+  leader_points: number | null;
+  leader_username: string | null;
 };
 
 export default function LeaguesScreen() {
@@ -46,21 +44,16 @@ export default function LeaguesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Dep auf user.id (Primitive), nicht user (Objekt) — sonst reloaded
-  // bei jedem Supabase-Session-Refresh.
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
     if (!userId) return;
 
-    // Alle Ligen, in denen ich Member bin. RLS sorgt dafür, dass ich nur
-    // die sehe, wo ich drin bin — kein zusätzlicher Filter nötig.
     const { data: memberRows, error: memErr } = await supabase
       .from('league_members')
       .select('league_id')
       .eq('user_id', userId);
 
     if (memErr) {
-      console.warn('leagues load error:', memErr.message);
       setLeagues([]);
       setLoading(false);
       return;
@@ -80,27 +73,62 @@ export default function LeaguesScreen() {
       .order('created_at', { ascending: false });
 
     if (lgErr) {
-      console.warn('leagues select error:', lgErr.message);
       setLeagues([]);
       setLoading(false);
       return;
     }
 
-    // Member-Counts in einem Batch holen
+    // Member-Counts
     const { data: counts } = await supabase
       .from('league_members')
-      .select('league_id')
+      .select('league_id, user_id')
       .in('league_id', ids);
-    const countMap = new Map<string, number>();
+    const membersByLeague = new Map<string, string[]>();
     for (const row of counts ?? []) {
-      countMap.set(row.league_id, (countMap.get(row.league_id) ?? 0) + 1);
+      const arr = membersByLeague.get(row.league_id) ?? [];
+      arr.push(row.user_id);
+      membersByLeague.set(row.league_id, arr);
+    }
+
+    // Punkte für alle relevanten User holen + Rankings rechnen
+    const allUserIds = Array.from(new Set((counts ?? []).map((r) => r.user_id)));
+    const pointsMap = new Map<string, number>();
+    const usernameMap = new Map<string, string>();
+    if (allUserIds.length > 0) {
+      const [{ data: scored }, { data: scoredSpecial }, { data: profiles }] = await Promise.all([
+        supabase.from('scored_tips').select('user_id, total_points').in('user_id', allUserIds),
+        supabase
+          .from('scored_special_tips')
+          .select('user_id, total_points')
+          .in('user_id', allUserIds),
+        supabase.from('profiles').select('id, username').in('id', allUserIds),
+      ]);
+      for (const s of scored ?? [])
+        pointsMap.set(s.user_id, (pointsMap.get(s.user_id) ?? 0) + (s.total_points ?? 0));
+      for (const s of scoredSpecial ?? [])
+        pointsMap.set(s.user_id, (pointsMap.get(s.user_id) ?? 0) + (s.total_points ?? 0));
+      for (const p of profiles ?? []) usernameMap.set(p.id, p.username);
     }
 
     setLeagues(
-      (leagueRows ?? []).map((l) => ({
-        ...l,
-        member_count: countMap.get(l.id) ?? 1,
-      })),
+      (leagueRows ?? []).map((l) => {
+        const memberIds = membersByLeague.get(l.id) ?? [];
+        const sorted = memberIds
+          .map((uid) => ({ uid, pts: pointsMap.get(uid) ?? 0 }))
+          .sort((a, b) => b.pts - a.pts);
+        const myIdx = sorted.findIndex((r) => r.uid === userId);
+        const myRank = myIdx >= 0 ? myIdx + 1 : null;
+        const myPts = myIdx >= 0 ? sorted[myIdx].pts : 0;
+        const leader = sorted[0] ?? null;
+        return {
+          ...l,
+          member_count: memberIds.length,
+          my_rank: myRank,
+          my_points: myPts,
+          leader_points: leader?.pts ?? null,
+          leader_username: leader ? usernameMap.get(leader.uid) ?? null : null,
+        };
+      }),
     );
     setLoading(false);
   }, [userId]);
@@ -125,11 +153,20 @@ export default function LeaguesScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
         }>
-        <ThemedText style={[styles.title, { color: c.text }]}>Ligen</ThemedText>
+        <Text
+          style={{
+            color: c.text,
+            fontSize: 32,
+            lineHeight: 38,
+            fontFamily: Fonts.display.bold,
+            letterSpacing: -1,
+          }}>
+          Ligen
+        </Text>
 
         <View style={styles.ctaRow}>
           <Button
-            label="Erstellen"
+            label="+ Erstellen"
             onPress={() => router.push('/leagues-new')}
             fullWidth
             style={{ flex: 1 }}
@@ -149,65 +186,129 @@ export default function LeaguesScreen() {
           </Card>
         ) : leagues.length === 0 ? (
           <Card padding="xl" style={styles.emptyCard}>
-            <ThemedText
+            <Text
               style={{
                 color: c.textMuted,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
-                fontFamily: Fonts?.rounded,
+                fontFamily: Fonts.body.regular,
+                fontSize: 14,
+                lineHeight: 22,
                 textAlign: 'center',
               }}>
               Noch keine Liga.{'\n'}Nutze die Buttons oben, um zu starten.
-            </ThemedText>
+            </Text>
           </Card>
         ) : (
-          <View style={{ gap: Spacing.sm }}>
-            {leagues.map((l) => (
+          <View style={{ gap: 10 }}>
+            {leagues.map((l, i) => (
               <Card
                 key={l.id}
                 padding="md"
-                onPress={() =>
-                  router.push({ pathname: '/leagues/[id]', params: { id: l.id } })
-                }>
+                onPress={() => router.push({ pathname: '/leagues/[id]', params: { id: l.id } })}>
                 <View style={styles.row}>
-                  <View style={[styles.iconSquare, { backgroundColor: c.accentSoft }]}>
-                    <IconSymbol name="person.3.fill" size={18} color={c.accent} />
+                  <View
+                    style={[
+                      styles.iconSquare,
+                      {
+                        backgroundColor: i === 0 ? c.accent : c.accentSoft,
+                      },
+                    ]}>
+                    <Text
+                      style={{
+                        color: i === 0 ? c.accentFg : c.accent,
+                        fontFamily: Fonts.display.bold,
+                        fontSize: 16,
+                      }}>
+                      {l.name.slice(0, 2).toUpperCase()}
+                    </Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
                       style={{
                         color: c.text,
-                        fontSize: FontSize.md,
-                        lineHeight: LineHeight.md,
-                        fontFamily: Fonts?.rounded,
-                        fontWeight: FontWeight.semibold,
+                        fontFamily: Fonts.display.bold,
+                        fontSize: 16,
+                        letterSpacing: -0.3,
+                        marginBottom: 4,
                       }}>
                       {l.name}
-                    </ThemedText>
+                    </Text>
                     <View style={styles.metaRow}>
-                      <ThemedText
+                      <Text
                         style={{
                           color: c.textMuted,
-                          fontSize: FontSize.sm,
-                          lineHeight: LineHeight.sm,
-                          fontFamily: Fonts?.rounded,
+                          fontFamily: Fonts.mono.semibold,
+                          fontSize: 11,
+                          letterSpacing: 0.3,
                         }}>
-                        {l.member_count}{' '}
-                        {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'}
-                      </ThemedText>
-                      <Badge label={l.invite_code} tone="neutral" />
+                        #{l.invite_code}
+                      </Text>
+                      <Text style={{ color: c.textFaint, fontSize: 12 }}>·</Text>
+                      <Text
+                        style={{
+                          color: c.textMuted,
+                          fontFamily: Fonts.mono.semibold,
+                          fontSize: 11,
+                          letterSpacing: 0.3,
+                          textTransform: 'uppercase',
+                        }}>
+                        {l.member_count} {l.member_count === 1 ? 'Mitglied' : 'Mitglieder'}
+                      </Text>
                     </View>
                   </View>
-                  <ThemedText
-                    style={{
-                      color: c.textFaint,
-                      fontSize: FontSize.xl,
-                      lineHeight: LineHeight.xl,
-                      fontFamily: Fonts?.rounded,
-                    }}>
-                    ›
-                  </ThemedText>
+                  {l.my_rank !== null && l.my_points > 0 ? (
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text
+                        style={{
+                          color: l.my_rank <= 3 ? c.accent : c.text,
+                          fontFamily: Fonts.display.bold,
+                          fontSize: 22,
+                          letterSpacing: -0.5,
+                          lineHeight: 24,
+                        }}>
+                        #{l.my_rank}
+                      </Text>
+                      <Text
+                        style={{
+                          color: c.textMuted,
+                          fontFamily: Fonts.mono.bold,
+                          fontSize: 10,
+                          letterSpacing: 0.6,
+                        }}>
+                        {l.my_points} PKT
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={{ color: c.textFaint, fontSize: 18 }}>›</Text>
+                  )}
                 </View>
+                {/* Leader-Footer */}
+                {l.leader_username && l.member_count > 1 && l.leader_points && l.leader_points > 0 ? (
+                  <View
+                    style={[styles.leaderFooter, { borderTopColor: c.divider }]}>
+                    <Text
+                      style={{
+                        color: c.textMuted,
+                        fontFamily: Fonts.mono.semibold,
+                        fontSize: 11,
+                        letterSpacing: 0.3,
+                        textTransform: 'uppercase',
+                      }}>
+                      👑 Leader · @{l.leader_username}
+                    </Text>
+                    {l.my_rank && l.my_rank > 1 && l.leader_points !== null ? (
+                      <Text
+                        style={{
+                          color: c.warm,
+                          fontFamily: Fonts.mono.bold,
+                          fontSize: 11,
+                          letterSpacing: LetterSpacing.label,
+                          textTransform: 'uppercase',
+                        }}>
+                        +{l.leader_points - l.my_points} PKT VORN
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
               </Card>
             ))}
           </View>
@@ -220,38 +321,35 @@ export default function LeaguesScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo, gap: Spacing.md },
-  title: {
-    fontSize: FontSize.xxl,
-    lineHeight: LineHeight.xxl,
-    fontWeight: FontWeight.heavy,
-    fontFamily: Fonts?.rounded,
-    letterSpacing: LetterSpacing.heading,
-    marginBottom: Spacing.sm,
-  },
   ctaRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  emptyCard: {
-    alignItems: 'center',
-  },
+  emptyCard: { alignItems: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
   },
   iconSquare: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: 4,
+    gap: 8,
+  },
+  leaderFooter: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
 });

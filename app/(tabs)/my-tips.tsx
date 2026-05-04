@@ -5,21 +5,20 @@ import {
   RefreshControl,
   SectionList,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { TeamFlag } from '@/components/ui/team-flag';
 import {
   Colors,
-  FontSize,
-  FontWeight,
   Fonts,
   LetterSpacing,
-  LineHeight,
+  Radius,
   Spacing,
 } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -34,6 +33,10 @@ type Row = {
   kickoff_at: string;
   home_team: string;
   away_team: string;
+  home_team_id: number | null;
+  away_team_id: number | null;
+  home_logo: string | null;
+  away_logo: string | null;
   status: string;
   home_goals: number | null;
   away_goals: number | null;
@@ -53,14 +56,10 @@ export default function MyTipsScreen() {
   const c = Colors[scheme];
 
   const [sections, setSections] = useState<Section[]>([]);
-  // Summe aller scored_special_tips.total_points über alle Turniere des Users.
-  // Wird zum Match-Punkte-Total addiert.
   const [specialPoints, setSpecialPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Dep auf user.id (Primitive), nicht user (Objekt) — sonst reloaded
-  // bei jedem Supabase-Session-Refresh.
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
     if (!userId) {
@@ -70,19 +69,14 @@ export default function MyTipsScreen() {
       return;
     }
 
-    // Aktuelles Turnier resolven — wir zeigen nur Tipps des laufenden Turniers.
     const tournament = await getCurrentTournament();
 
-    // Sondertipp-Summe nur für das aktive Turnier — sonst würden Sondertipps
-    // aus alten Turnieren in die Header-Punktzahl wandern.
     const specialPromise = supabase
       .from('scored_special_tips')
       .select('total_points')
       .eq('user_id', userId)
       .eq('tournament', tournament);
 
-    // Alle eigenen Tipps holen — gefiltert wird gleich serverseitig per
-    // Match-Tournament (Matches dieses Turniers IN tipIds).
     const { data: tipRows } = await supabase
       .from('tips')
       .select('match_id, home_goals, away_goals, first_scorer_id')
@@ -109,7 +103,9 @@ export default function MyTipsScreen() {
     const [{ data: matchRows }, { data: scoredRows }, playersRes] = await Promise.all([
       supabase
         .from('matches')
-        .select('id, kickoff_at, home_team, away_team, status, home_goals, away_goals')
+        .select(
+          'id, kickoff_at, home_team, away_team, home_team_id, away_team_id, status, home_goals, away_goals',
+        )
         .eq('tournament', tournament)
         .in('id', matchIds),
       supabase
@@ -126,6 +122,23 @@ export default function MyTipsScreen() {
     const pointsMap = new Map(scoredRows?.map((s) => [s.match_id, s.total_points]) ?? []);
     const playerMap = new Map((playersRes.data ?? []).map((p) => [p.id, p.name]));
 
+    // Team-Logos batch
+    const teamIds = Array.from(
+      new Set(
+        (matchRows ?? [])
+          .flatMap((m) => [m.home_team_id, m.away_team_id])
+          .filter((id): id is number => id !== null),
+      ),
+    );
+    const logoMap = new Map<number, string>();
+    if (teamIds.length > 0) {
+      const { data: teamRows } = await supabase
+        .from('teams')
+        .select('id, logo_url')
+        .in('id', teamIds);
+      for (const t of teamRows ?? []) if (t.logo_url) logoMap.set(t.id, t.logo_url);
+    }
+
     const rows: Row[] = tipRows
       .map((t): Row | null => {
         const m = matchMap.get(t.match_id);
@@ -135,6 +148,10 @@ export default function MyTipsScreen() {
           kickoff_at: m.kickoff_at,
           home_team: m.home_team,
           away_team: m.away_team,
+          home_team_id: m.home_team_id,
+          away_team_id: m.away_team_id,
+          home_logo: m.home_team_id ? logoMap.get(m.home_team_id) ?? null : null,
+          away_logo: m.away_team_id ? logoMap.get(m.away_team_id) ?? null : null,
           status: m.status,
           home_goals: m.home_goals,
           away_goals: m.away_goals,
@@ -156,8 +173,8 @@ export default function MyTipsScreen() {
       .sort((a, b) => b.kickoff_at.localeCompare(a.kickoff_at));
 
     const next: Section[] = [];
-    if (open.length > 0) next.push({ title: 'Offen', data: open });
-    if (finished.length > 0) next.push({ title: 'Gespielt', data: finished });
+    if (open.length > 0) next.push({ title: `Offen · ${open.length}`, data: open });
+    if (finished.length > 0) next.push({ title: `Gespielt · ${finished.length}`, data: finished });
     setSections(next);
     setLoading(false);
   }, [userId]);
@@ -184,7 +201,6 @@ export default function MyTipsScreen() {
     );
   }
 
-  // Gesamtpunkte-Badge im Header: gescorde Match-Tipps + Sondertipps.
   const matchPoints = sections
     .flatMap((s) => s.data)
     .reduce((sum, r) => sum + (r.points ?? 0), 0);
@@ -200,41 +216,68 @@ export default function MyTipsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
         }
         ListHeaderComponent={
-          <View>
-            <View style={styles.headerRow}>
-              <ThemedText style={[styles.h1, { color: c.text }]}>Meine Tipps</ThemedText>
-              {totalPoints > 0 ? <Badge label={`${totalPoints} Pkt`} tone="accent" /> : null}
-            </View>
-            {/* Aufschlüsselung nur zeigen wenn beide Quellen Punkte beigesteuert
-                haben — sonst ist die Summe = Match-Punkte und der Subtitle
-                wäre redundant. */}
-            {specialPoints > 0 && matchPoints > 0 ? (
-              <ThemedText
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Text
                 style={{
                   color: c.textMuted,
-                  fontSize: FontSize.sm,
-                  lineHeight: LineHeight.sm,
-                  fontFamily: Fonts?.rounded,
-                  marginTop: -Spacing.sm,
-                  marginBottom: Spacing.lg,
+                  fontFamily: Fonts.mono.bold,
+                  fontSize: 11,
+                  letterSpacing: LetterSpacing.label,
+                  textTransform: 'uppercase',
                 }}>
-                {matchPoints} aus Spielen · {specialPoints} aus Sondertipps
-              </ThemedText>
+                Saison · WM 2026
+              </Text>
+              <Text
+                style={{
+                  color: c.text,
+                  fontSize: 32,
+                  lineHeight: 38,
+                  fontFamily: Fonts.display.bold,
+                  letterSpacing: -1,
+                  marginTop: 4,
+                }}>
+                Meine Tipps
+              </Text>
+            </View>
+            {totalPoints > 0 ? (
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text
+                  style={{
+                    color: c.accent,
+                    fontFamily: Fonts.display.bold,
+                    fontSize: 36,
+                    letterSpacing: -1,
+                    lineHeight: 38,
+                  }}>
+                  {totalPoints}
+                </Text>
+                <Text
+                  style={{
+                    color: c.textMuted,
+                    fontFamily: Fonts.mono.bold,
+                    fontSize: 10,
+                    letterSpacing: 0.6,
+                    marginTop: 2,
+                  }}>
+                  PUNKTE
+                </Text>
+              </View>
             ) : null}
           </View>
         }
         ListEmptyComponent={
           <Card padding="xl" style={styles.emptyCard}>
-            <ThemedText
+            <Text
               style={{
                 color: c.textMuted,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
+                fontFamily: Fonts.body.regular,
+                fontSize: 15,
+                lineHeight: 22,
                 textAlign: 'center',
-                fontFamily: Fonts?.rounded,
               }}>
               Du hast noch keinen Tipp abgegeben.
-            </ThemedText>
+            </Text>
             <Button
               label="Zum Spielplan"
               onPress={() => router.push('/(tabs)/matches')}
@@ -244,116 +287,194 @@ export default function MyTipsScreen() {
         }
         renderSectionHeader={({ section }) => (
           <View style={[styles.sectionHeader, { backgroundColor: c.bg }]}>
-            <ThemedText
+            <Text
               style={{
                 color: c.textMuted,
-                fontSize: FontSize.xs,
-                fontWeight: FontWeight.bold,
-                fontFamily: Fonts?.rounded,
-                textTransform: 'uppercase',
+                fontFamily: Fonts.mono.bold,
+                fontSize: 11,
                 letterSpacing: LetterSpacing.label,
+                textTransform: 'uppercase',
               }}>
               {section.title}
-            </ThemedText>
+            </Text>
           </View>
         )}
-        renderItem={({ item }) => (
-          <Card
-            padding="md"
-            style={styles.cardSpacing}
-            onPress={() =>
-              router.push({
-                pathname: '/tip/[matchId]',
-                params: { matchId: String(item.matchId) },
-              })
-            }>
-            <View style={styles.rowHeader}>
-              <ThemedText
-                style={{
-                  color: c.textMuted,
-                  fontSize: FontSize.xs,
-                  lineHeight: LineHeight.xs,
-                  fontFamily: Fonts?.rounded,
-                  fontWeight: FontWeight.medium,
-                }}>
-                {formatKickoffDate(item.kickoff_at)} · {formatKickoffTime(item.kickoff_at)}
-              </ThemedText>
-              {item.points !== null ? (
-                <ThemedText
-                  style={{
-                    color: item.points > 0 ? c.accent : c.textFaint,
-                    fontSize: FontSize.xs,
-                    lineHeight: LineHeight.xs,
-                    fontFamily: Fonts?.rounded,
-                    fontWeight: FontWeight.bold,
-                  }}>
-                  +{item.points} Pkt
-                </ThemedText>
-              ) : item.is_finished ? (
-                <ThemedText
-                  style={{
-                    color: c.textFaint,
-                    fontSize: FontSize.xs,
-                    lineHeight: LineHeight.xs,
-                  }}>
-                  —
-                </ThemedText>
-              ) : null}
-            </View>
-
-            <View style={styles.rowTeams}>
-              <ThemedText style={[styles.team, { color: c.text }]} numberOfLines={1}>
-                {deName(item.home_team)}
-              </ThemedText>
-              <ThemedText
-                style={{
-                  color: c.textFaint,
-                  fontSize: FontSize.sm,
-                  lineHeight: LineHeight.sm,
-                  fontFamily: Fonts?.rounded,
-                }}>
-                vs
-              </ThemedText>
-              <ThemedText style={[styles.team, { color: c.text }]} numberOfLines={1}>
-                {deName(item.away_team)}
-              </ThemedText>
-            </View>
-
-            <View style={styles.rowFooter}>
-              <Badge label={`Tipp ${item.tip_home}:${item.tip_away}`} tone="accent" />
-              {item.scorer_name ? (
-                <ThemedText
-                  style={{
-                    color: c.textMuted,
-                    fontSize: FontSize.xs,
-                    lineHeight: LineHeight.xs,
-                    fontFamily: Fonts?.rounded,
-                    flex: 1,
-                  }}
-                  numberOfLines={1}>
-                  ⚽ {item.scorer_name}
-                </ThemedText>
-              ) : (
-                <View style={{ flex: 1 }} />
-              )}
-              {item.is_finished && item.home_goals !== null && item.away_goals !== null ? (
-                <ThemedText
-                  style={{
-                    color: c.text,
-                    fontSize: FontSize.xs,
-                    lineHeight: LineHeight.xs,
-                    fontFamily: Fonts?.rounded,
-                    fontWeight: FontWeight.semibold,
-                  }}>
-                  Endstand {item.home_goals}:{item.away_goals}
-                </ThemedText>
-              ) : null}
-            </View>
-          </Card>
-        )}
+        renderItem={({ item }) =>
+          item.is_finished ? (
+            <FinishedTipCard item={item} c={c} onPress={() =>
+              router.push({ pathname: '/tip/[matchId]', params: { matchId: String(item.matchId) } })
+            } />
+          ) : (
+            <OpenTipCard item={item} c={c} onPress={() =>
+              router.push({ pathname: '/tip/[matchId]', params: { matchId: String(item.matchId) } })
+            } />
+          )
+        }
         stickySectionHeadersEnabled
       />
     </SafeAreaView>
+  );
+}
+
+function OpenTipCard({
+  item,
+  c,
+  onPress,
+}: {
+  item: Row;
+  c: (typeof Colors)['light'];
+  onPress: () => void;
+}) {
+  return (
+    <Card padding="md" style={styles.cardSpacing} onPress={onPress}>
+      <Text
+        style={{
+          color: c.textMuted,
+          fontFamily: Fonts.mono.semibold,
+          fontSize: 10,
+          letterSpacing: 0.6,
+          marginBottom: 6,
+        }}>
+        {formatKickoffDate(item.kickoff_at).toUpperCase()} · {formatKickoffTime(item.kickoff_at)}
+      </Text>
+      <View style={styles.rowTeamsCompact}>
+        <TeamFlag logoUrl={item.home_logo} size={26} radius={6} />
+        <Text
+          style={{ color: c.text, fontFamily: Fonts.display.bold, fontSize: 15, letterSpacing: -0.3 }}
+          numberOfLines={1}>
+          {deName(item.home_team)}
+        </Text>
+        <Text style={{ color: c.textFaint, fontSize: 12, fontFamily: Fonts.mono.regular }}>vs</Text>
+        <TeamFlag logoUrl={item.away_logo} size={26} radius={6} />
+        <Text
+          style={{ color: c.text, fontFamily: Fonts.display.bold, fontSize: 15, letterSpacing: -0.3 }}
+          numberOfLines={1}>
+          {deName(item.away_team)}
+        </Text>
+      </View>
+      <View style={styles.rowFooter}>
+        <Badge label={`Tipp ${item.tip_home}:${item.tip_away}`} tone="accent" />
+        {item.scorer_name ? (
+          <Text
+            style={{
+              color: c.textMuted,
+              fontFamily: Fonts.mono.semibold,
+              fontSize: 11,
+              letterSpacing: 0.3,
+              flex: 1,
+            }}
+            numberOfLines={1}>
+            ⚽ {item.scorer_name}
+          </Text>
+        ) : null}
+      </View>
+    </Card>
+  );
+}
+
+function FinishedTipCard({
+  item,
+  c,
+  onPress,
+}: {
+  item: Row;
+  c: (typeof Colors)['light'];
+  onPress: () => void;
+}) {
+  const exact =
+    item.home_goals !== null &&
+    item.away_goals !== null &&
+    item.tip_home === item.home_goals &&
+    item.tip_away === item.away_goals;
+  const points = item.points ?? 0;
+
+  return (
+    <Card padding="md" style={styles.cardSpacing} onPress={onPress}>
+      <View style={styles.rowDate}>
+        <Text
+          style={{
+            color: c.textMuted,
+            fontFamily: Fonts.mono.semibold,
+            fontSize: 10,
+            letterSpacing: 0.6,
+          }}>
+          {formatKickoffDate(item.kickoff_at).toUpperCase()} · {formatKickoffTime(item.kickoff_at)}
+        </Text>
+        <Text
+          style={{
+            color: points > 0 ? c.accent : c.textFaint,
+            fontFamily: Fonts.mono.bold,
+            fontSize: 10,
+            letterSpacing: 0.6,
+          }}>
+          +{points} PKT
+        </Text>
+      </View>
+
+      <View style={[styles.teamRow, { marginTop: 6 }]}>
+        <TeamFlag logoUrl={item.home_logo} size={26} radius={6} />
+        <Text
+          style={{
+            color: c.text,
+            fontFamily: Fonts.display.bold,
+            fontSize: 15,
+            letterSpacing: -0.3,
+            flex: 1,
+          }}
+          numberOfLines={1}>
+          {deName(item.home_team)}
+        </Text>
+        <Text style={{ color: c.text, fontFamily: Fonts.display.bold, fontSize: 18 }}>
+          {item.home_goals}
+        </Text>
+      </View>
+      <View style={[styles.teamRow, { marginTop: 6, marginBottom: 10 }]}>
+        <TeamFlag logoUrl={item.away_logo} size={26} radius={6} />
+        <Text
+          style={{
+            color: c.text,
+            fontFamily: Fonts.display.bold,
+            fontSize: 15,
+            letterSpacing: -0.3,
+            flex: 1,
+          }}
+          numberOfLines={1}>
+          {deName(item.away_team)}
+        </Text>
+        <Text style={{ color: c.text, fontFamily: Fonts.display.bold, fontSize: 18 }}>
+          {item.away_goals}
+        </Text>
+      </View>
+
+      <View
+        style={{
+          paddingHorizontal: 10,
+          paddingVertical: 8,
+          borderRadius: Radius.sm,
+          backgroundColor: exact ? c.accentSoft : c.surfaceSunken,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+        }}>
+        <Text
+          style={{
+            color: exact ? c.accent : c.textMuted,
+            fontFamily: Fonts.mono.semibold,
+            fontSize: 11,
+            letterSpacing: 0.4,
+          }}>
+          DEIN TIPP {item.tip_home}:{item.tip_away}
+        </Text>
+        <Text
+          style={{
+            color: exact ? c.accent : c.textMuted,
+            fontFamily: Fonts.mono.semibold,
+            fontSize: 11,
+            letterSpacing: 0.4,
+          }}>
+          {exact ? '✓ EXAKT' : points > 0 ? '✓ TREFFER' : '✗ DANEBEN'}
+        </Text>
+      </View>
+    </Card>
   );
 }
 
@@ -363,18 +484,10 @@ const styles = StyleSheet.create({
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     gap: Spacing.md,
-  },
-  h1: {
-    fontSize: FontSize.xxl,
-    lineHeight: LineHeight.xxl,
-    fontWeight: FontWeight.heavy,
-    fontFamily: Fonts?.rounded,
-    letterSpacing: LetterSpacing.heading,
-    flex: 1,
   },
   emptyCard: {
     alignItems: 'center',
@@ -387,30 +500,26 @@ const styles = StyleSheet.create({
   },
   cardSpacing: {
     marginBottom: Spacing.sm,
-    gap: Spacing.xs,
   },
-  rowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  rowTeams: {
+  rowTeamsCompact: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  team: {
-    fontSize: FontSize.md,
-    lineHeight: LineHeight.md,
-    fontFamily: Fonts?.rounded,
-    fontWeight: FontWeight.semibold,
-    flexShrink: 1,
+    marginBottom: Spacing.sm,
   },
   rowFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+  },
+  rowDate: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  teamRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
 });

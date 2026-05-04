@@ -5,23 +5,22 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PickerGroup, PickerPlayer, PlayerPicker } from '@/components/player-picker';
 import { PickerTeam, TeamPicker } from '@/components/team-picker';
-import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { TeamFlag } from '@/components/ui/team-flag';
 import {
   Colors,
-  FontSize,
-  FontWeight,
   Fonts,
   LetterSpacing,
-  LineHeight,
   Radius,
+  Shadow,
   Spacing,
 } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -37,7 +36,6 @@ type Slot =
   | 'semifinalist_a'
   | 'semifinalist_b'
   | 'top_scorer'
-  // 'group:A' .. 'group:L' — dynamisch, daher als template-literal type.
   | `group:${string}`;
 
 type TeamSlot = Exclude<Slot, 'top_scorer'>;
@@ -46,16 +44,14 @@ type State = {
   [K in TeamSlot]: PickerTeam | null;
 } & { top_scorer: PickerPlayer | null };
 
-const SLOT_CONFIG: {
-  key: TeamSlot;
-  label: string;
-  hint: string;
-}[] = [
-  { key: 'champion', label: 'Weltmeister', hint: 'Wer gewinnt die WM?' },
-  { key: 'runner_up', label: 'Finalgegner', hint: 'Gegen wen spielt der Weltmeister im Finale?' },
-  { key: 'semifinalist_a', label: '3. Halbfinalist', hint: 'Wer verliert das eine Halbfinale?' },
-  { key: 'semifinalist_b', label: '4. Halbfinalist', hint: 'Wer verliert das andere Halbfinale?' },
+const SLOT_CONFIG: { key: TeamSlot; label: string }[] = [
+  { key: 'champion', label: 'Weltmeister' },
+  { key: 'runner_up', label: 'Finalgegner' },
+  { key: 'semifinalist_a', label: '3. Halbfinalist' },
+  { key: 'semifinalist_b', label: '4. Halbfinalist' },
 ];
+
+type Tab = 'top' | 'groups';
 
 export default function SpecialTipsScreen() {
   const { user } = useAuth();
@@ -69,13 +65,14 @@ export default function SpecialTipsScreen() {
   const [saved, setSaved] = useState(false);
   const [locked, setLocked] = useState(false);
   const [deadline, setDeadline] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
 
+  const [tab, setTab] = useState<Tab>('top');
   const [teams, setTeams] = useState<PickerTeam[]>([]);
+  const [logos, setLogos] = useState<Map<number, string>>(new Map());
   const [playerGroups, setPlayerGroups] = useState<PickerGroup[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupPicks, setGroupPicks] = useState<Record<string, PickerTeam | null>>({});
-  // Aktives Turnier wird zur Laufzeit resolvt (nicht hardcoded), damit der
-  // Screen sich automatisch auf zukünftige Turniere umstellt.
   const [tournament, setTournament] = useState<string | null>(null);
 
   const [state, setState] = useState<State>({
@@ -95,7 +92,6 @@ export default function SpecialTipsScreen() {
       const t = await getCurrentTournament();
       setTournament(t);
 
-      // Deadline prüfen — erster Anpfiff des Turniers.
       const { data: deadlineData } = await supabase.rpc('special_tips_deadline', {
         p_tournament: t,
       });
@@ -105,15 +101,23 @@ export default function SpecialTipsScreen() {
         setLocked(true);
       }
 
-      // Teams des Turniers laden
       const { data: teamRows } = await supabase
         .from('teams')
-        .select('id, name, code')
+        .select('id, name, code, logo_url')
         .eq('tournament', t);
-      const pickerTeams: PickerTeam[] = teamRows ?? [];
+      const pickerTeams: PickerTeam[] = (teamRows ?? []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        code: r.code,
+      }));
       setTeams(pickerTeams);
 
-      // Gruppen ableiten + bestehende Gruppensieger-Tipps laden
+      const logoMap = new Map<number, string>();
+      for (const r of teamRows ?? []) {
+        if (r.logo_url) logoMap.set(r.id, r.logo_url);
+      }
+      setLogos(logoMap);
+
       const grps = await getTournamentGroups(t);
       setGroups(grps);
 
@@ -133,7 +137,6 @@ export default function SpecialTipsScreen() {
       }
       setGroupPicks(initialGroupPicks);
 
-      // Bestehenden Tipp laden
       const { data: tip } = await supabase
         .from('special_tips')
         .select(
@@ -155,7 +158,7 @@ export default function SpecialTipsScreen() {
           semifinalist_b: tip.semifinalist_b_team_id
             ? (teamById.get(tip.semifinalist_b_team_id) ?? null)
             : null,
-          top_scorer: null, // unten aufgelöst
+          top_scorer: null,
         };
         if (tip.top_scorer_player_id) {
           const { data: p } = await supabase
@@ -168,9 +171,6 @@ export default function SpecialTipsScreen() {
         setState(newState);
       }
 
-      // Spielerliste für Torschützenkönig: alle Spieler aller Turnier-Teams,
-      // gruppiert nach Team. Kann groß werden (48 Teams × 26 Spieler ≈ 1250),
-      // aber einmal laden ist ok.
       if (pickerTeams.length > 0) {
         const teamIds = pickerTeams.map((t) => t.id);
         const { data: playerRows } = await supabase
@@ -185,21 +185,26 @@ export default function SpecialTipsScreen() {
           arr.push(p);
           byTeam.set(p.team_id, arr);
         }
-        const groups: PickerGroup[] = pickerTeams
+        const playerGrps: PickerGroup[] = pickerTeams
           .map((t) => ({
             teamId: t.id,
             teamName: deName(t.name),
             players: byTeam.get(t.id) ?? [],
           }))
           .filter((g) => g.players.length > 0)
-          // nach deutschem Namen sortieren, damit Picker-Reihenfolge passt
           .sort((a, b) => a.teamName.localeCompare(b.teamName, 'de'));
-        setPlayerGroups(groups);
+        setPlayerGroups(playerGrps);
       }
 
       setLoading(false);
     })();
   }, [user]);
+
+  // Countdown live updaten
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const pickedTeamIds = useMemo(
     () =>
@@ -209,16 +214,23 @@ export default function SpecialTipsScreen() {
     [state],
   );
 
+  const filledCount = useMemo(() => {
+    const top = SLOT_CONFIG.filter((s) => state[s.key] != null).length;
+    const top_scorer = state.top_scorer ? 1 : 0;
+    const grps = Object.values(groupPicks).filter((v) => v != null).length;
+    return top + top_scorer + grps;
+  }, [state, groupPicks]);
+
+  const totalCount = SLOT_CONFIG.length + 1 + groups.length;
+
   const setTeamSlot = (slot: TeamSlot, team: PickerTeam | null) => {
     setState((s) => ({ ...s, [slot]: team }));
     setSaved(false);
   };
-
   const setTopScorer = (p: PickerPlayer | null) => {
     setState((s) => ({ ...s, top_scorer: p }));
     setSaved(false);
   };
-
   const setGroupPick = (letter: string, team: PickerTeam | null) => {
     setGroupPicks((p) => ({ ...p, [letter]: team }));
     setSaved(false);
@@ -249,9 +261,6 @@ export default function SpecialTipsScreen() {
       return;
     }
 
-    // Gruppensieger-Tipps: leere Slots löschen, gefüllte upserten.
-    // Wir machen es in zwei separaten Statements statt einem Diff, weil
-    // das simpler ist und Postgres das problemlos abkann.
     const filledLetters = Object.keys(groupPicks).filter((l) => groupPicks[l]);
     const emptyLetters = Object.keys(groupPicks).filter((l) => !groupPicks[l]);
 
@@ -303,17 +312,21 @@ export default function SpecialTipsScreen() {
     );
   }
 
-  const deadlineText = deadline
-    ? new Date(deadline).toLocaleDateString('de-DE', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }) +
+  // Deadline-Countdown
+  const deadlineDelta = deadline ? new Date(deadline).getTime() - now : null;
+  const deadlineCountdown = (() => {
+    if (deadlineDelta === null) return null;
+    if (deadlineDelta <= 0) return 'JETZT';
+    const days = Math.floor(deadlineDelta / 86_400_000);
+    const hours = Math.floor((deadlineDelta % 86_400_000) / 3_600_000);
+    if (days > 0) return `${days}d ${hours}h`;
+    const mins = Math.floor((deadlineDelta % 3_600_000) / 60_000);
+    return `${hours}h ${mins}m`;
+  })();
+  const deadlineDateText = deadline
+    ? new Date(deadline).toLocaleDateString('de-DE', { day: 'numeric', month: 'long' }) +
       ' · ' +
-      new Date(deadline).toLocaleTimeString('de-DE', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      new Date(deadline).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
     : null;
 
   return (
@@ -321,227 +334,231 @@ export default function SpecialTipsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-          <ThemedText
-            style={{ color: c.textMuted, fontFamily: Fonts?.rounded, fontSize: FontSize.md }}>
+          <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
             ← Zurück
-          </ThemedText>
+          </Text>
         </Pressable>
 
-        <ThemedText style={[styles.h1, { color: c.text }]}>Sondertipps</ThemedText>
-        <ThemedText style={[styles.intro, { color: c.textMuted }]}>
-          Einmalig vor dem Turnier tippen — Weltmeister, Finalgegner, die zwei anderen
-          Halbfinalisten, den Torschützenkönig und alle Gruppensieger.
-        </ThemedText>
-
-        {deadlineText ? (
-          <Card
-            variant={locked ? 'default' : 'accent'}
-            padding="md"
+        {/* Headline */}
+        <View>
+          <Text
             style={{
-              ...styles.deadlineBox,
-              ...(locked ? { borderColor: c.danger } : {}),
+              color: c.warm,
+              fontFamily: Fonts.mono.bold,
+              fontSize: 11,
+              letterSpacing: LetterSpacing.label,
+              textTransform: 'uppercase',
             }}>
-            <ThemedText
-              style={{
-                color: locked ? c.danger : c.accent,
-                fontSize: FontSize.xs,
-                lineHeight: LineHeight.xs,
-                fontFamily: Fonts?.rounded,
-                fontWeight: FontWeight.bold,
-                textTransform: 'uppercase',
-                letterSpacing: LetterSpacing.label,
-              }}>
-              {locked ? 'Abgabe geschlossen seit' : 'Abgabe möglich bis'}
-            </ThemedText>
-            <ThemedText
-              style={{
-                color: locked ? c.danger : c.text,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
-                fontFamily: Fonts?.rounded,
-                fontWeight: FontWeight.semibold,
-                marginTop: 2,
-              }}>
-              {deadlineText}
-            </ThemedText>
+            ★ Sondertipps · {filledCount}/{totalCount}
+          </Text>
+          <Text
+            style={{
+              color: c.text,
+              fontSize: 32,
+              lineHeight: 38,
+              fontFamily: Fonts.display.bold,
+              letterSpacing: -1,
+              marginTop: 4,
+            }}>
+            Tippe das Turnier
+          </Text>
+        </View>
+
+        {/* Deadline-Pill */}
+        {deadlineDateText ? (
+          <Card
+            variant={locked ? 'flat' : 'warm'}
+            padding="sm"
+            style={styles.deadlineBox}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: locked ? c.danger : c.warm,
+                  fontFamily: Fonts.mono.bold,
+                  fontSize: 10,
+                  letterSpacing: LetterSpacing.label,
+                  textTransform: 'uppercase',
+                }}>
+                {locked ? 'Geschlossen' : 'Abgabe bis'}
+              </Text>
+              <Text
+                style={{
+                  color: c.text,
+                  fontFamily: Fonts.display.bold,
+                  fontSize: 16,
+                  letterSpacing: -0.3,
+                  marginTop: 1,
+                }}>
+                {deadlineDateText}
+              </Text>
+            </View>
+            {!locked && deadlineCountdown ? (
+              <Text
+                style={{
+                  color: c.warm,
+                  fontFamily: Fonts.mono.bold,
+                  fontSize: 14,
+                  letterSpacing: 0.5,
+                }}>
+                {deadlineCountdown}
+              </Text>
+            ) : null}
           </Card>
         ) : null}
 
+        {/* Sub-Tab Pill-Switcher */}
+        <View style={[styles.tabSwitch, { backgroundColor: c.surfaceSunken, borderColor: c.border }]}>
+          {(
+            [
+              { k: 'top' as Tab, l: 'Top-Tipps' },
+              { k: 'groups' as Tab, l: 'Gruppensieger' },
+            ]
+          ).map((opt) => {
+            const active = tab === opt.k;
+            return (
+              <Pressable
+                key={opt.k}
+                onPress={() => setTab(opt.k)}
+                style={[
+                  styles.tabBtn,
+                  active
+                    ? { backgroundColor: c.surface, ...Shadow.sm }
+                    : null,
+                ]}>
+                <Text
+                  style={{
+                    color: active ? c.text : c.textMuted,
+                    fontFamily: Fonts.display.bold,
+                    fontSize: 13,
+                    letterSpacing: -0.2,
+                  }}>
+                  {opt.l}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {teams.length === 0 ? (
           <Card padding="lg" style={styles.emptyCard}>
-            <ThemedText
+            <Text
               style={{
                 color: c.textMuted,
-                fontFamily: Fonts?.rounded,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
+                fontFamily: Fonts.body.regular,
+                fontSize: 15,
+                lineHeight: 22,
                 textAlign: 'center',
               }}>
-              Noch keine Teams in der DB.{'\n'}Auslosung der WM 2026 abwarten & Fixtures
-              importieren.
-            </ThemedText>
+              Noch keine Teams in der DB.{'\n'}Auslosung der WM 2026 abwarten & Fixtures importieren.
+            </Text>
           </Card>
-        ) : (
+        ) : tab === 'top' ? (
           <>
-            <ThemedText style={[styles.sectionLabel, { color: c.textMuted }]}>Teams</ThemedText>
-            {SLOT_CONFIG.map((slot) => {
-              const picked = state[slot.key];
-              // Andere bereits belegte Team-IDs → dieser Slot darf sie nicht wählen.
-              const othersSelected = pickedTeamIds.filter((id) => id !== picked?.id);
-              return (
-                <View key={slot.key} style={styles.slotWrap}>
-                  <ThemedText
-                    style={{
-                      color: c.textMuted,
-                      fontSize: FontSize.xs,
-                      lineHeight: LineHeight.xs,
-                      fontFamily: Fonts?.rounded,
-                      marginBottom: 6,
-                    }}>
-                    {slot.hint}
-                  </ThemedText>
-                  <Pressable
-                    onPress={() => !locked && setOpenPicker(slot.key)}
-                    disabled={locked}
-                    style={({ pressed }) => [
-                      styles.slotField,
-                      {
-                        backgroundColor: c.surface,
-                        borderColor: picked ? c.accentBorder : c.border,
-                        opacity: pressed ? 0.85 : locked ? 0.6 : 1,
-                        transform: [{ scale: pressed && !locked ? 0.99 : 1 }],
-                      },
-                    ]}>
-                    <View style={{ flex: 1 }}>
-                      <ThemedText
-                        style={{
-                          color: c.textFaint,
-                          fontSize: FontSize.xs,
-                          lineHeight: LineHeight.xs,
-                          fontFamily: Fonts?.rounded,
-                          fontWeight: FontWeight.bold,
-                          textTransform: 'uppercase',
-                          letterSpacing: LetterSpacing.label,
-                        }}>
-                        {slot.label}
-                      </ThemedText>
-                      <ThemedText
-                        style={{
-                          color: picked ? c.text : c.textFaint,
-                          fontSize: FontSize.md,
-                          lineHeight: LineHeight.md,
-                          fontFamily: Fonts?.rounded,
-                          fontWeight: FontWeight.semibold,
-                          marginTop: 2,
-                        }}>
-                        {picked ? deName(picked.name) : 'Team auswählen…'}
-                      </ThemedText>
-                    </View>
-                    <ThemedText
-                      style={{
-                        color: c.textMuted,
-                        fontSize: FontSize.lg,
-                        lineHeight: LineHeight.lg,
-                        fontFamily: Fonts?.rounded,
-                      }}>
-                      ›
-                    </ThemedText>
-                  </Pressable>
-                  {openPicker === slot.key ? (
-                    <TeamPicker
-                      visible
-                      title={slot.label}
-                      teams={teams}
-                      selectedId={picked?.id ?? null}
-                      disabledIds={othersSelected}
-                      onClose={() => setOpenPicker(null)}
-                      onSelect={(t) => setTeamSlot(slot.key, t)}
+            {/* 2x2 Slot-Grid für Top-Tipps */}
+            <View style={styles.grid}>
+              {SLOT_CONFIG.map((slot) => {
+                const picked = state[slot.key];
+                const othersSelected = pickedTeamIds.filter((id) => id !== picked?.id);
+                return (
+                  <View key={slot.key} style={styles.gridCell}>
+                    <SlotCard
+                      label={slot.label}
+                      teamName={picked ? deName(picked.name) : null}
+                      logoUrl={picked ? logos.get(picked.id) ?? null : null}
+                      onPress={() => !locked && setOpenPicker(slot.key)}
+                      disabled={locked}
+                      c={c}
                     />
-                  ) : null}
-                </View>
-              );
-            })}
+                    {openPicker === slot.key ? (
+                      <TeamPicker
+                        visible
+                        title={slot.label}
+                        teams={teams}
+                        selectedId={picked?.id ?? null}
+                        disabledIds={othersSelected}
+                        onClose={() => setOpenPicker(null)}
+                        onSelect={(t) => setTeamSlot(slot.key, t)}
+                      />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
 
-            <ThemedText style={[styles.sectionLabel, { color: c.textMuted }]}>
-              Torschützenkönig
-            </ThemedText>
-            <View style={styles.slotWrap}>
-              <ThemedText
+            {/* Top-Scorer als prominente Card */}
+            <Card variant="flat" padding="md">
+              <Text
                 style={{
-                  color: c.textMuted,
-                  fontSize: FontSize.xs,
-                  lineHeight: LineHeight.xs,
-                  fontFamily: Fonts?.rounded,
+                  color: c.warm,
+                  fontFamily: Fonts.mono.bold,
+                  fontSize: 10,
+                  letterSpacing: LetterSpacing.label,
+                  textTransform: 'uppercase',
                   marginBottom: 6,
                 }}>
-                Wer wird Top-Torschütze des Turniers?
-              </ThemedText>
+                ⚽ Torschützenkönig
+              </Text>
               <Pressable
                 onPress={() => !locked && playerGroups.length > 0 && setOpenPicker('top_scorer')}
                 disabled={locked || playerGroups.length === 0}
                 style={({ pressed }) => [
-                  styles.slotField,
+                  styles.scorerRow,
                   {
-                    backgroundColor: c.surface,
-                    borderColor: state.top_scorer ? c.accentBorder : c.border,
                     opacity: pressed ? 0.85 : locked || playerGroups.length === 0 ? 0.6 : 1,
-                    transform: [
-                      { scale: pressed && !locked && playerGroups.length > 0 ? 0.99 : 1 },
-                    ],
                   },
                 ]}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText
+                <View
+                  style={[
+                    styles.scorerNum,
+                    { backgroundColor: state.top_scorer ? c.warmSoft : c.surfaceSunken },
+                  ]}>
+                  <Text
                     style={{
-                      color: c.textFaint,
-                      fontSize: FontSize.xs,
-                      lineHeight: LineHeight.xs,
-                      fontFamily: Fonts?.rounded,
-                      fontWeight: FontWeight.bold,
-                      textTransform: 'uppercase',
-                      letterSpacing: LetterSpacing.label,
+                      color: state.top_scorer ? c.warm : c.textFaint,
+                      fontFamily: Fonts.display.bold,
+                      fontSize: 18,
                     }}>
-                    Top-Scorer
-                  </ThemedText>
-                  <ThemedText
-                    style={{
-                      color: state.top_scorer ? c.text : c.textFaint,
-                      fontSize: FontSize.md,
-                      lineHeight: LineHeight.md,
-                      fontFamily: Fonts?.rounded,
-                      fontWeight: FontWeight.semibold,
-                      marginTop: 2,
-                    }}>
-                    {state.top_scorer
-                      ? state.top_scorer.name
-                      : playerGroups.length === 0
-                      ? 'Noch keine Kader importiert'
-                      : 'Spieler auswählen…'}
-                  </ThemedText>
+                    {state.top_scorer?.number ?? '?'}
+                  </Text>
                 </View>
-                <ThemedText
-                  style={{
-                    color: c.textMuted,
-                    fontSize: FontSize.lg,
-                    lineHeight: LineHeight.lg,
-                    fontFamily: Fonts?.rounded,
-                  }}>
-                  ›
-                </ThemedText>
+                <View style={{ flex: 1 }}>
+                  {state.top_scorer ? (
+                    <>
+                      <Text
+                        style={{
+                          color: c.text,
+                          fontFamily: Fonts.display.bold,
+                          fontSize: 17,
+                          letterSpacing: -0.3,
+                        }}>
+                        {state.top_scorer.name}
+                      </Text>
+                      <Text
+                        style={{
+                          color: c.textMuted,
+                          fontFamily: Fonts.mono.regular,
+                          fontSize: 11,
+                          letterSpacing: 0.4,
+                          marginTop: 1,
+                          textTransform: 'uppercase',
+                        }}>
+                        {state.top_scorer.position ?? 'Spieler'}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text
+                      style={{
+                        color: c.textMuted,
+                        fontFamily: Fonts.body.medium,
+                        fontSize: 15,
+                      }}>
+                      {playerGroups.length === 0 ? 'Noch keine Kader importiert' : 'Spieler wählen…'}
+                    </Text>
+                  )}
+                </View>
+                <Text style={{ color: c.textFaint, fontSize: 18 }}>›</Text>
               </Pressable>
-              {playerGroups.length === 0 ? (
-                <ThemedText
-                  style={{
-                    color: c.textFaint,
-                    fontSize: FontSize.xs,
-                    lineHeight: LineHeight.xs,
-                    fontFamily: Fonts?.rounded,
-                    marginTop: Spacing.xs,
-                  }}>
-                  Lauf `node scripts/import-squads.mjs` lokal, sobald die Kader offiziell sind.
-                </ThemedText>
-              ) : null}
-            </View>
+            </Card>
 
             <PlayerPicker
               visible={openPicker === 'top_scorer'}
@@ -550,75 +567,80 @@ export default function SpecialTipsScreen() {
               groups={playerGroups}
               selectedId={state.top_scorer?.id ?? null}
             />
-
-            <ThemedText style={[styles.sectionLabel, { color: c.textMuted }]}>
-              Gruppensieger
-            </ThemedText>
-            {groups.length === 0 ? (
-              <Card padding="md" style={styles.emptyCard}>
-                <ThemedText
-                  style={{
-                    color: c.textFaint,
-                    fontFamily: Fonts?.rounded,
-                    fontSize: FontSize.sm,
-                    lineHeight: LineHeight.sm,
-                    textAlign: 'center',
-                  }}>
-                  Gruppen erscheinen, sobald die Auslosung importiert ist.
-                </ThemedText>
-              </Card>
-            ) : (
-              groups.map((g) => {
+          </>
+        ) : (
+          /* Tab: Gruppensieger */
+          groups.length === 0 ? (
+            <Card padding="lg" style={styles.emptyCard}>
+              <Text
+                style={{
+                  color: c.textMuted,
+                  fontFamily: Fonts.body.regular,
+                  fontSize: 14,
+                  lineHeight: 22,
+                  textAlign: 'center',
+                }}>
+                Gruppen erscheinen, sobald die Auslosung importiert ist.{'\n'}
+                Lauf `node scripts/import-team-groups.mjs` lokal.
+              </Text>
+            </Card>
+          ) : (
+            <View style={{ gap: Spacing.sm }}>
+              {groups.map((g) => {
                 const slotKey: Slot = `group:${g.letter}`;
                 const picked = groupPicks[g.letter];
                 return (
-                  <View key={g.letter} style={styles.slotWrap}>
+                  <View key={g.letter}>
                     <Pressable
                       onPress={() => !locked && setOpenPicker(slotKey)}
                       disabled={locked}
                       style={({ pressed }) => [
-                        styles.slotField,
+                        styles.groupRow,
                         {
                           backgroundColor: c.surface,
                           borderColor: picked ? c.accentBorder : c.border,
                           opacity: pressed ? 0.85 : locked ? 0.6 : 1,
                           transform: [{ scale: pressed && !locked ? 0.99 : 1 }],
                         },
+                        Shadow.sm,
                       ]}>
-                      <View style={{ flex: 1 }}>
-                        <ThemedText
+                      <View style={[styles.groupBadge, { backgroundColor: c.accentSoft }]}>
+                        <Text
                           style={{
-                            color: c.textFaint,
-                            fontSize: FontSize.xs,
-                            lineHeight: LineHeight.xs,
-                            fontFamily: Fonts?.rounded,
-                            fontWeight: FontWeight.bold,
-                            textTransform: 'uppercase',
+                            color: c.accent,
+                            fontFamily: Fonts.display.bold,
+                            fontSize: 18,
+                            letterSpacing: -0.3,
+                          }}>
+                          {g.letter}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: c.textMuted,
+                            fontFamily: Fonts.mono.bold,
+                            fontSize: 10,
                             letterSpacing: LetterSpacing.label,
+                            textTransform: 'uppercase',
                           }}>
                           Gruppe {g.letter}
-                        </ThemedText>
-                        <ThemedText
+                        </Text>
+                        <Text
                           style={{
                             color: picked ? c.text : c.textFaint,
-                            fontSize: FontSize.md,
-                            lineHeight: LineHeight.md,
-                            fontFamily: Fonts?.rounded,
-                            fontWeight: FontWeight.semibold,
-                            marginTop: 2,
+                            fontFamily: Fonts.display.bold,
+                            fontSize: 15,
+                            letterSpacing: -0.3,
+                            marginTop: 1,
                           }}>
-                          {picked ? deName(picked.name) : 'Sieger auswählen…'}
-                        </ThemedText>
+                          {picked ? deName(picked.name) : 'Sieger wählen…'}
+                        </Text>
                       </View>
-                      <ThemedText
-                        style={{
-                          color: c.textMuted,
-                          fontSize: FontSize.lg,
-                          lineHeight: LineHeight.lg,
-                          fontFamily: Fonts?.rounded,
-                        }}>
-                        ›
-                      </ThemedText>
+                      {picked ? (
+                        <TeamFlag logoUrl={logos.get(picked.id) ?? null} size={28} />
+                      ) : null}
+                      <Text style={{ color: c.textFaint, fontSize: 18 }}>›</Text>
                     </Pressable>
                     {openPicker === slotKey ? (
                       <TeamPicker
@@ -632,99 +654,207 @@ export default function SpecialTipsScreen() {
                     ) : null}
                   </View>
                 );
-              })
-            )}
-
-            {error ? (
-              <ThemedText style={[styles.error, { color: c.danger }]}>{error}</ThemedText>
-            ) : null}
-
-            {!locked ? (
-              <Button
-                label={saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Sondertipps speichern'}
-                onPress={submit}
-                loading={saving}
-                disabled={saving}
-                size="lg"
-                fullWidth
-                style={{
-                  marginTop: Spacing.xl,
-                  backgroundColor: saved ? c.success : c.accent,
-                }}
-              />
-            ) : (
-              <Card padding="lg" style={styles.lockedBox}>
-                <ThemedText
-                  style={{
-                    color: c.textMuted,
-                    fontSize: FontSize.md,
-                    lineHeight: LineHeight.md,
-                    fontFamily: Fonts?.rounded,
-                    textAlign: 'center',
-                  }}>
-                  Die Abgabe-Frist ist vorbei. Änderungen sind nicht mehr möglich.
-                </ThemedText>
-              </Card>
-            )}
-          </>
+              })}
+            </View>
+          )
         )}
+
+        {error ? (
+          <Text style={{ color: c.danger, fontFamily: Fonts.body.medium, fontSize: 13 }}>
+            {error}
+          </Text>
+        ) : null}
+
+        {!locked && teams.length > 0 ? (
+          <View style={{ gap: 6, marginTop: Spacing.md }}>
+            <Button
+              label={saved ? '✓ Gespeichert' : saving ? 'Speichere…' : 'Sondertipps speichern'}
+              onPress={submit}
+              loading={saving}
+              disabled={saving}
+              size="lg"
+              fullWidth
+              variant={saved ? 'warm' : 'primary'}
+            />
+            <Text
+              style={{
+                color: c.textFaint,
+                fontFamily: Fonts.mono.semibold,
+                fontSize: 10,
+                letterSpacing: 0.6,
+                textAlign: 'center',
+                marginTop: 4,
+              }}>
+              BIS ZUR DEADLINE BELIEBIG OFT ÄNDERBAR
+            </Text>
+          </View>
+        ) : locked ? (
+          <Card padding="lg" style={{ marginTop: Spacing.md }}>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts.body.regular,
+                fontSize: 14,
+                lineHeight: 22,
+                textAlign: 'center',
+              }}>
+              Die Abgabe-Frist ist vorbei. Änderungen sind nicht mehr möglich.
+            </Text>
+          </Card>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function SlotCard({
+  label,
+  teamName,
+  logoUrl,
+  onPress,
+  disabled,
+  c,
+}: {
+  label: string;
+  teamName: string | null;
+  logoUrl: string | null;
+  onPress: () => void;
+  disabled: boolean;
+  c: (typeof Colors)['light'];
+}) {
+  const filled = teamName != null;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.slotCard,
+        {
+          backgroundColor: c.surface,
+          borderColor: filled ? c.accentBorder : c.border,
+          opacity: pressed ? 0.85 : disabled ? 0.6 : 1,
+          transform: [{ scale: pressed && !disabled ? 0.98 : 1 }],
+        },
+        Shadow.sm,
+      ]}>
+      <Text
+        style={{
+          color: filled ? c.accent : c.textFaint,
+          fontFamily: Fonts.mono.bold,
+          fontSize: 9,
+          letterSpacing: LetterSpacing.label,
+          textTransform: 'uppercase',
+        }}>
+        {label}
+      </Text>
+      {filled ? (
+        <>
+          <TeamFlag logoUrl={logoUrl} size={36} />
+          <Text
+            numberOfLines={1}
+            style={{
+              color: c.text,
+              fontFamily: Fonts.display.bold,
+              fontSize: 15,
+              letterSpacing: -0.3,
+            }}>
+            {teamName}
+          </Text>
+        </>
+      ) : (
+        <>
+          <View style={styles.slotFlagEmpty}>
+            <Text style={{ color: c.textFaint, fontSize: 22, fontFamily: Fonts.display.regular }}>
+              +
+            </Text>
+          </View>
+          <Text
+            style={{
+              color: c.textMuted,
+              fontFamily: Fonts.body.medium,
+              fontSize: 13,
+            }}>
+            Team wählen…
+          </Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl },
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.xxxl, gap: Spacing.lg },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  back: { marginBottom: Spacing.md },
-  h1: {
-    fontSize: FontSize.xxl,
-    lineHeight: LineHeight.xxl,
-    fontWeight: FontWeight.bold,
-    fontFamily: Fonts?.rounded,
-    marginBottom: Spacing.sm,
-  },
-  intro: {
-    fontSize: FontSize.sm,
-    lineHeight: LineHeight.sm,
-    fontFamily: Fonts?.rounded,
-    marginBottom: Spacing.lg,
-  },
+  back: { marginBottom: Spacing.xs },
   deadlineBox: {
-    marginBottom: Spacing.lg,
-    gap: 2,
-  },
-  emptyCard: {
-    alignItems: 'center',
-  },
-  sectionLabel: {
-    fontSize: FontSize.xs,
-    lineHeight: LineHeight.xs,
-    fontFamily: Fonts?.rounded,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.label,
-    fontWeight: FontWeight.bold,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
-  },
-  slotWrap: { marginBottom: Spacing.md },
-  slotField: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: Radius.lg,
+    gap: Spacing.sm,
+  },
+  tabSwitch: {
+    flexDirection: 'row',
+    padding: 4,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    minHeight: 64,
+    gap: 4,
   },
-  error: {
-    marginTop: Spacing.sm,
-    fontSize: FontSize.sm,
-    lineHeight: LineHeight.sm,
-    fontFamily: Fonts?.rounded,
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
   },
-  lockedBox: {
-    marginTop: Spacing.xl,
+  emptyCard: { alignItems: 'center' },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  gridCell: {
+    width: '48%',
+    flexGrow: 1,
+  },
+  slotCard: {
+    borderWidth: 1.5,
+    borderRadius: 18,
+    padding: 14,
+    gap: 10,
+    minHeight: 120,
+  },
+  slotFlagEmpty: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scorerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  scorerNum: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+  },
+  groupBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

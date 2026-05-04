@@ -1,10 +1,10 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors, FontSize, FontWeight, Fonts } from '@/constants/design';
+import { Colors, Fonts, Shadow } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
@@ -14,27 +14,26 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: c.tabActive,
+        tabBarActiveTintColor: c.accentFg,
         tabBarInactiveTintColor: c.tabInactive,
         headerShown: false,
         tabBarButton: HapticTab,
-        // Modernisierte TabBar:
-        // - Etwas mehr Höhe (komfortabler), weniger sichtbare Border (mehr "schwebend")
-        // - Active-State über Tint + leicht fettere Labels
+        // Bolzplatz-Style: Bar sitzt flush am unteren Rand (kein Float-Gap),
+        // aber behält die Surface-Card-Optik mit weichem Shadow nach oben.
         tabBarStyle: {
-          backgroundColor: c.bg,
+          backgroundColor: c.surface,
           borderTopColor: c.border,
-          borderTopWidth: Platform.OS === 'ios' ? 0.5 : 1,
+          borderTopWidth: 0.5,
           height: Platform.OS === 'ios' ? 84 : 64,
-          paddingTop: 6,
+          paddingTop: 8,
           paddingBottom: Platform.OS === 'ios' ? 28 : 8,
+          ...Shadow.md,
         },
         tabBarLabelStyle: {
-          fontFamily: Fonts?.rounded,
-          fontSize: FontSize.xs,
-          fontWeight: FontWeight.semibold,
-          letterSpacing: 0.2,
-          marginTop: 2,
+          fontFamily: Fonts.display.bold,
+          fontSize: 10,
+          letterSpacing: -0.1,
+          marginTop: 4,
         },
         tabBarItemStyle: {
           paddingTop: 4,
@@ -44,8 +43,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="house.fill" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <PillIcon focused={focused} c={c} icon="house.fill" />
           ),
         }}
       />
@@ -53,8 +52,8 @@ export default function TabLayout() {
         name="matches"
         options={{
           title: 'Spielplan',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="list.bullet" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <PillIcon focused={focused} c={c} icon="list.bullet" />
           ),
         }}
       />
@@ -62,8 +61,8 @@ export default function TabLayout() {
         name="my-tips"
         options={{
           title: 'Meine Tipps',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="checklist" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <PillIcon focused={focused} c={c} icon="checklist" />
           ),
         }}
       />
@@ -71,11 +70,36 @@ export default function TabLayout() {
         name="leagues"
         options={{
           title: 'Ligen',
-          tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="person.3.fill" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <PillIcon focused={focused} c={c} icon="person.3.fill" />
           ),
         }}
       />
     </Tabs>
+  );
+}
+
+// Active-State: Icon sitzt in einem accent-Pill. Inactive: nur Icon.
+function PillIcon({
+  focused,
+  c,
+  icon,
+}: {
+  focused: boolean;
+  c: (typeof Colors)['light'];
+  icon: 'house.fill' | 'list.bullet' | 'checklist' | 'person.3.fill';
+}) {
+  return (
+    <View
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: 999,
+        backgroundColor: focused ? c.accent : 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <IconSymbol size={16} name={icon} color={focused ? c.accentFg : c.tabInactive} />
+    </View>
   );
 }

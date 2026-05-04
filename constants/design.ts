@@ -1,138 +1,150 @@
-// Bolzify Design-Tokens
-// Ein einziger Ort für Farben, Typo, Spacing, Radien, Schatten.
-// Alle Screens greifen hier zu — keine Magic Numbers in StyleSheets.
+// Bolzify Design-Tokens — "Bolzplatz" Direction (v0.17)
+// Quelle: design_handoff_bolzify/bolzplatz/tokens.jsx
+//
+// Designprinzipien:
+// - Akzent-Grün #15803D (light) / #22C55E (dark) — bleibt das Brand
+// - Tor-Orange #E8744E als sekundärer "warm"-Akzent für Sondertipps,
+//   Live-Indikatoren, Streaks (NICHT als zweiter Standard-Akzent)
+// - Light-bg = Paper-Off-White (#F4F1EA, warm) — NICHT grünlich getönt
+// - Dark-bg = OLED-Schwarz (#06090A)
+// - Shadows als Default (nicht Borders)
+// - Pill-Buttons, große Card-Radien (R.xl = 24)
+// - Mono-UPPERCASE für Section-Labels (das prägnanteste Element)
 
 import { Platform } from 'react-native';
 
-// Farb-Philosophie 2.0 (Stand v0.15):
-// - Akzent = Tailwind-Grün #22C55E (matched die Web-Pages, kontrastreich auf Dunkel)
-// - Surface = warm-getöntes Anthrazit, leicht ins Grünliche (statt neutral-grau)
-//   → wirkt lebendig, nicht klinisch
-// - True-Black-Background nur für OLED-Optik in Dark
-// - Generell: weniger Saturation, mehr Tiefe durch Layering
-
 const palette = {
-  // Bolzplatz-Grün (Akzent) — Tailwind-Skala für moderne Apps
-  green50: '#E8FBF0',
-  green200: '#A6EEC1',
+  // Bolzplatz-Grün (Brand-Akzent)
+  green50: '#E8F4EC',
+  green100: '#D1E9D8',
+  green200: '#A6D5B5',
   green400: '#4ADE80',
-  green500: '#22C55E', // Haupt-Akzent
+  green500: '#22C55E',
   green600: '#16A34A',
   green700: '#15803D',
+  green800: '#0F4D2C',
 
-  // Leder / Nostalgie — gedämpfter, dezenter Sekundär-Akzent
-  leather400: '#A88671',
-  leather600: '#6B4F3D',
+  // Tor-Orange (sek. Akzent)
+  orange50: '#FBE8DD',
+  orange300: '#F2A684',
+  orange500: '#E8744E',
+  orange600: '#C95A36',
 
-  // Signal / Live (Orange) — etwas wärmer
-  signal500: '#FB923C',
-  signal400: '#FDBA74',
+  // Papier-Skala (warm, nicht grünlich)
+  paper50: '#FBF8F1',
+  paper100: '#F4F1EA',
+  paper200: '#EDE7DA',
+  ink50: '#9AA89F',
+  ink400: '#5C6B62',
+  ink600: '#2A332D',
+  ink800: '#16201A',
+  ink900: '#0E1A12',
+
+  // Dark-Skala (OLED-tauglich, leicht grünlich)
+  night950: '#06090A',
+  night900: '#0E1416',
+  night800: '#171F22',
+  night700: '#202A2D',
 
   // Status
-  danger500: '#F43F5E', // Rosa-Rot, weicher als reines Rot
-  warn500: '#F59E0B',
-  success500: '#22C55E',
-
-  // Neutrale Skala — leicht ins Grüne getönt für Konsistenz mit Akzent
-  // (statt purer Grau-Skala — gibt der App eine klare Tönung)
-  ink0: '#FFFFFF',
-  ink50: '#F7F9F8',
-  ink100: '#EFF3F0',
-  ink200: '#DDE4DF',
-  ink300: '#B8C4BC',
-  ink400: '#7E8E83',
-  ink500: '#5A695F',
-  ink600: '#3E4944',
-  ink700: '#2A322D',
-  ink800: '#1B221E',
-  ink900: '#121613',
-  ink950: '#0A0D0B', // True-Black mit Hauch Grün
+  danger: '#E5484D',
+  warn: '#E8A53C',
+  info: '#4F9CDC',
 };
 
 export const Colors = {
-  dark: {
-    // Hintergründe — 3-stufiges Layering für Tiefe
-    bg: palette.ink950,
-    background: palette.ink950, // alias für Legacy-Themed-View
-    surface: palette.ink800,
-    surfaceElevated: palette.ink700,
-    surfaceHi: palette.ink600, // höchste Elevation (Modals, Pop-Ups)
-    border: 'rgba(255,255,255,0.06)', // sehr dezenter Border (statt fester Linie)
-    borderStrong: 'rgba(255,255,255,0.12)',
-
-    // Text
-    text: '#F2F5F3',
-    textMuted: palette.ink400,
-    textFaint: palette.ink500,
-
-    // Akzente
-    accent: palette.green500,
-    accentSoft: 'rgba(34,197,94,0.14)', // für Background-Tints
-    accentBorder: 'rgba(34,197,94,0.35)',
-    accentHover: palette.green400,
-    accentFg: '#062611',
-    tint: palette.green400, // alias
-
-    nostalgia: palette.leather400,
-
-    // Zustände
-    live: palette.signal500,
-    liveFg: '#1A0F00',
-    liveSoft: 'rgba(251,146,60,0.16)',
-    danger: palette.danger500,
-    dangerSoft: 'rgba(244,63,94,0.16)',
-    success: palette.success500,
-    warn: palette.warn500,
-    warnSoft: 'rgba(245,158,11,0.16)',
-
-    // Tabs / Icons
-    icon: palette.ink400,
-    tabActive: palette.green400,
-    tabInactive: palette.ink500,
-    tabIconDefault: palette.ink500,
-    tabIconSelected: palette.green400,
-  },
   light: {
-    bg: palette.ink50,
-    background: palette.ink50,
-    surface: palette.ink0,
-    surfaceElevated: palette.ink100,
-    surfaceHi: palette.ink0,
-    border: 'rgba(0,0,0,0.06)',
-    borderStrong: 'rgba(0,0,0,0.12)',
+    bg: palette.paper100,
+    background: palette.paper100, // Legacy-Alias
+    surface: '#FFFFFF',
+    surfaceSunken: palette.paper50,
+    surfaceElevated: '#FFFFFF',
+    surfaceHi: '#FFFFFF',
+    surfaceTint: palette.green50,
+    border: 'rgba(15,30,20,0.06)',
+    borderStrong: 'rgba(15,30,20,0.12)',
+    divider: 'rgba(15,30,20,0.08)',
 
-    text: '#0F1A12',
-    textMuted: palette.ink500,
-    textFaint: palette.ink400,
+    text: palette.ink900,
+    textMuted: palette.ink400,
+    textFaint: palette.ink50,
 
-    accent: palette.green600,
-    accentSoft: 'rgba(34,197,94,0.10)',
-    accentBorder: 'rgba(22,163,74,0.30)',
-    accentHover: palette.green500,
-    accentFg: palette.ink0,
-    tint: palette.green600,
+    accent: palette.green700,
+    accentHover: palette.green600,
+    accentSoft: palette.green50,
+    accentBorder: 'rgba(21,128,61,0.30)',
+    accentFg: '#FFFFFE',
+    tint: palette.green700,
 
-    nostalgia: palette.leather600,
+    warm: palette.orange500,
+    warmSoft: palette.orange50,
+    warmBorder: 'rgba(232,116,78,0.30)',
+    warmFg: '#FFFFFE',
 
-    live: palette.signal500,
-    liveFg: palette.ink0,
-    liveSoft: 'rgba(251,146,60,0.12)',
-    danger: palette.danger500,
-    dangerSoft: 'rgba(244,63,94,0.10)',
-    success: palette.success500,
-    warn: palette.warn500,
-    warnSoft: 'rgba(245,158,11,0.10)',
+    live: palette.orange500,
+    liveFg: '#FFFFFE',
+    liveSoft: 'rgba(232,116,78,0.14)',
+    danger: palette.danger,
+    dangerSoft: 'rgba(229,72,77,0.10)',
+    success: palette.green600,
+    warn: palette.warn,
+    warnSoft: 'rgba(232,165,60,0.14)',
 
-    icon: palette.ink500,
-    tabActive: palette.green600,
-    tabInactive: palette.ink400,
-    tabIconDefault: palette.ink400,
-    tabIconSelected: palette.green600,
+    icon: palette.ink400,
+    tabActive: palette.green700,
+    tabInactive: palette.ink50,
+    tabIconDefault: palette.ink50,
+    tabIconSelected: palette.green700,
+  },
+  dark: {
+    bg: palette.night950,
+    background: palette.night950,
+    surface: palette.night900,
+    surfaceSunken: palette.night950,
+    surfaceElevated: palette.night800,
+    surfaceHi: palette.night700,
+    surfaceTint: 'rgba(34,197,94,0.06)',
+    border: 'rgba(255,255,255,0.06)',
+    borderStrong: 'rgba(255,255,255,0.14)',
+    divider: 'rgba(255,255,255,0.08)',
+
+    text: '#ECF1F0',
+    textMuted: '#7A8A86',
+    textFaint: '#4F5C58',
+
+    accent: palette.green500,
+    accentHover: palette.green400,
+    accentSoft: 'rgba(34,197,94,0.14)',
+    accentBorder: 'rgba(34,197,94,0.40)',
+    accentFg: '#062611',
+    tint: palette.green400,
+
+    warm: palette.orange500,
+    warmSoft: 'rgba(232,116,78,0.16)',
+    warmBorder: 'rgba(232,116,78,0.40)',
+    warmFg: '#1A0F00',
+
+    live: palette.orange500,
+    liveFg: '#1A0F00',
+    liveSoft: 'rgba(232,116,78,0.16)',
+    danger: palette.danger,
+    dangerSoft: 'rgba(229,72,77,0.16)',
+    success: palette.green500,
+    warn: palette.warn,
+    warnSoft: 'rgba(232,165,60,0.16)',
+
+    icon: '#7A8A86',
+    tabActive: palette.green400,
+    tabInactive: '#5A695F',
+    tabIconDefault: '#5A695F',
+    tabIconSelected: palette.green400,
   },
 };
 
-// 4pt-Grid (feiner als 8pt für Mikro-Layouts).
-// In StyleSheets: `padding: Spacing.md` statt Magic Numbers.
+// 4pt-Grid
+// `jumbo` ist Footer-Cushion in ScrollViews. Tab-Bar wird von expo-router
+// automatisch als Inset eingefügt — wir brauchen also nur etwas Atemluft
+// nach dem letzten Inhalt.
 export const Spacing = {
   xxs: 2,
   xs: 4,
@@ -142,17 +154,16 @@ export const Spacing = {
   xl: 24,
   xxl: 32,
   xxxl: 48,
-  jumbo: 64,
+  jumbo: 32,
 };
 
-// Radien — moderne Apps sind großzügig rund. Pille für Pills/Buttons.
-// Kein Wert unter 10 (eckige Karten wirken altmodisch).
+// Cards default xl (24), Buttons immer pill.
 export const Radius = {
   sm: 10,
   md: 14,
   lg: 20,
-  xl: 28,
-  xxl: 36,
+  xl: 24,
+  xxl: 32,
   pill: 999,
 };
 
@@ -164,14 +175,10 @@ export const FontSize = {
   xl: 22,
   xxl: 28,
   display: 36,
-  jumbo: 44,
+  jumbo: 48,
 };
 
-// Explizite Line-Heights — zwingend für große Headlines, da iOS mit
-// `ui-rounded`-Font sehr knappe Default-Metrics hat und Großbuchstaben oben
-// abschneidet. Faustregel: ~1.15-1.2 × FontSize für Headlines, ~1.4 für Fließtext.
-// Mind. 4-6pt extra Spielraum, sonst werden Akzent-Buchstaben (Ä, Ö, Ü, @, /)
-// am oberen Rand geclippt.
+// LineHeight großzügig für Custom-Fonts (Familjen Grotesk hat tighter Metrics).
 export const LineHeight = {
   xs: 14,
   sm: 18,
@@ -179,79 +186,91 @@ export const LineHeight = {
   lg: 24,
   xl: 28,
   xxl: 34,
-  display: 44,
+  display: 42,
   jumbo: 54,
 };
 
+// Legacy — wird mit Custom-Fonts nicht mehr ausgewertet (jedes Weight ist eine
+// eigene Font-Family). Bleibt drin für Code, der noch nicht migriert ist.
 export const FontWeight = {
   regular: '400' as const,
   medium: '500' as const,
   semibold: '600' as const,
   bold: '700' as const,
-  heavy: '800' as const,
+  heavy: '700' as const, // 800 nicht in Familjen Grotesk verfügbar
 };
 
-// Sub-pixel letter-spacing für tighter, moderne Display-Texte.
 export const LetterSpacing = {
-  display: -0.6,
+  display: -1.2,
   heading: -0.3,
   body: 0,
-  label: 0.4, // für UPPERCASE-Section-Labels
+  label: 1.4, // für UPPERCASE Mono-Labels
+  pillLabel: 0.3, // für Mono-Pills (Badges)
 };
 
-// Schatten-System. Auf Android wird `elevation` genutzt, auf iOS die Shadow-Props.
-// Wir geben pro Stufe ein passendes Gesamtobjekt zurück, sodass Components
-// einfach `...Shadow.md` spreaden können.
+// Shadow-System. iOS via shadow*-Props, Android via elevation.
+// "Soft" Schatten mit warm-ink-Tint statt purem Schwarz (light-mode).
 export const Shadow = Platform.select({
   ios: {
     sm: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.18,
-      shadowRadius: 6,
+      shadowColor: '#0F1E14',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 3,
     },
     md: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.22,
+      shadowColor: '#0F1E14',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.10,
       shadowRadius: 14,
     },
     lg: {
-      shadowColor: '#000',
+      shadowColor: '#0F1E14',
       shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.28,
-      shadowRadius: 24,
+      shadowOpacity: 0.16,
+      shadowRadius: 32,
     },
   },
   default: {
-    sm: { elevation: 2 },
-    md: { elevation: 6 },
-    lg: { elevation: 12 },
+    sm: { elevation: 1 },
+    md: { elevation: 4 },
+    lg: { elevation: 10 },
   },
 })!;
 
-export const Fonts = Platform.select({
-  ios: {
-    // Moderne iOS-Apps nutzen ui-rounded für freundlichere, weichere Wirkung.
-    // System-Default für Body, Rounded für Headlines + UI-Akzente.
-    sans: 'system-ui',
-    rounded: 'ui-rounded',
-    serif: 'ui-serif',
-    mono: 'ui-monospace',
+// ============================================================================
+// Fonts — Custom Google Fonts via lib/fonts.ts geladen.
+// In RN gibt's keinen fontWeight-Lookup mit Custom-Fonts — jedes Weight ist
+// eine eigene Font-Family. Deshalb explizite Weight-Keys statt FontWeight.
+// ============================================================================
+
+export const Fonts = {
+  display: {
+    regular: 'FamiljenGrotesk_400Regular',
+    medium: 'FamiljenGrotesk_500Medium',
+    semibold: 'FamiljenGrotesk_600SemiBold',
+    bold: 'FamiljenGrotesk_700Bold',
+    heavy: 'FamiljenGrotesk_700Bold', // Alias — kein 800 in Familjen
   },
-  default: {
-    sans: 'normal',
-    rounded: 'normal',
-    serif: 'serif',
-    mono: 'monospace',
+  body: {
+    regular: 'Geist_400Regular',
+    medium: 'Geist_500Medium',
+    semibold: 'Geist_600SemiBold',
+    bold: 'Geist_700Bold',
   },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-    rounded: "'SF Pro Rounded', system-ui, -apple-system, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  mono: {
+    regular: 'JetBrainsMono_400Regular',
+    medium: 'JetBrainsMono_500Medium',
+    semibold: 'JetBrainsMono_600SemiBold',
+    bold: 'JetBrainsMono_700Bold',
   },
-});
+
+  // Legacy-Aliasse — damit nicht-migrierte Screens kein crash bekommen.
+  // Sie sehen mit dem rounded → display-bold-Mapping eh schöner aus.
+  rounded: 'FamiljenGrotesk_700Bold',
+  sans: 'Geist_400Regular',
+  serif: 'Geist_400Regular',
+};
 
 export type ColorScheme = keyof typeof Colors;
-export type ThemeColors = typeof Colors.dark;
+export type ThemeColors = typeof Colors.light;

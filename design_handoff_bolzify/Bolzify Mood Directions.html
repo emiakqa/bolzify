@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bolzify — Mood Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Familjen+Grotesk:wght@500;600;700;800&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; background: #1A1818; color: #fff; font-family: 'Inter', system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="moods/mood-stadium-night.jsx"></script>
+<script type="text/babel" src="moods/mood-bolzplatz-summer.jsx"></script>
+<script type="text/babel" src="moods/mood-stadionprogramm.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+// DesignCanvas, DCSection, DCArtboard, IOSFrame are global via window.*
+
+function Swatch({ color, label, dark }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: 8, background: color,
+        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)",
+      }} />
+      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: dark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)" }}>
+        <div style={{ fontWeight: 600, color: dark ? "#fff" : "#0F1A12" }}>{label}</div>
+        <div>{color}</div>
+      </div>
+    </div>
+  );
+}
+
+function MoodNotes({ mood, tokens, dark, body, font, principles }) {
+  return (
+    <div style={{
+      width: 460, height: 920, padding: 36,
+      background: dark ? "#0F1416" : "#FFFFFE",
+      color: dark ? "#ECF1F0" : "#0F1A12",
+      fontFamily: "'Inter', system-ui, sans-serif",
+      display: "flex", flexDirection: "column", gap: 20,
+      overflow: "hidden",
+      borderRight: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+    }}>
+      <div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.4,
+          textTransform: "uppercase", color: dark ? "rgba(236,241,240,0.55)" : "rgba(15,26,18,0.55)", marginBottom: 8,
+        }}>{mood.tag}</div>
+        <div style={{ fontFamily: font, fontSize: 36, fontWeight: mood.serif ? 400 : 800, letterSpacing: -1, lineHeight: 1.05 }}>
+          {mood.title}
+        </div>
+        <div style={{ fontSize: 14, lineHeight: 1.55, color: dark ? "rgba(236,241,240,0.7)" : "rgba(15,26,18,0.65)", marginTop: 12 }}>
+          {body}
+        </div>
+      </div>
+
+      <div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: 1.4,
+          textTransform: "uppercase", color: dark ? "rgba(236,241,240,0.5)" : "rgba(15,26,18,0.5)", marginBottom: 10,
+        }}>Palette</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {tokens.map((s, i) => <Swatch key={i} color={s.v} label={s.k} dark={dark} />)}
+        </div>
+      </div>
+
+      <div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: 1.4,
+          textTransform: "uppercase", color: dark ? "rgba(236,241,240,0.5)" : "rgba(15,26,18,0.5)", marginBottom: 10,
+        }}>Type</div>
+        <div style={{ fontFamily: font, fontSize: 44, fontWeight: mood.serif ? 400 : 800, letterSpacing: -1.2, lineHeight: 1 }}>
+          Anpfiff
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: dark ? "rgba(236,241,240,0.55)" : "rgba(15,26,18,0.55)", marginTop: 8 }}>
+          {mood.fontDesc}
+        </div>
+      </div>
+
+      <div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: 1.4,
+          textTransform: "uppercase", color: dark ? "rgba(236,241,240,0.5)" : "rgba(15,26,18,0.5)", marginBottom: 10,
+        }}>Prinzipien</div>
+        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+          {principles.map((p, i) => (
+            <li key={i} style={{
+              fontSize: 13, lineHeight: 1.5, color: dark ? "rgba(236,241,240,0.85)" : "rgba(15,26,18,0.8)",
+              paddingLeft: 16, position: "relative",
+            }}>
+              <span style={{ position: "absolute", left: 0, top: 8, width: 6, height: 1.5, background: mood.accent }} />
+              {p}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div style={{
+        marginTop: "auto", padding: "14px 16px",
+        border: `1px solid ${mood.accent}`,
+        background: mood.accentSoft,
+        color: mood.accent,
+        borderRadius: mood.serif ? 0 : 12,
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 0.6,
+      }}>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>RISIKO / EFFORT</div>
+        <div style={{ color: dark ? "rgba(236,241,240,0.85)" : "rgba(15,26,18,0.8)", lineHeight: 1.5, letterSpacing: 0 }}>
+          {mood.risk}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MoodBoard({ mood, tokens, dark, body, font, principles, ScreenComp }) {
+  return (
+    <div style={{
+      display: "flex",
+      background: dark ? "#0A0D0E" : "#F4F1EA",
+      borderRadius: 18, overflow: "hidden",
+      boxShadow: "0 18px 60px rgba(0,0,0,0.35)",
+    }}>
+      <MoodNotes mood={mood} tokens={tokens} dark={dark} body={body} font={font} principles={principles} />
+      <div style={{
+        padding: "60px 80px", display: "flex", alignItems: "center", justifyContent: "center",
+        background: dark ? "radial-gradient(circle at 30% 20%, rgba(34,197,94,0.06), transparent 60%)" : "transparent",
+      }}>
+        <window.IOSDevice dark={dark} width={402} height={874}>
+          <ScreenComp />
+        </window.IOSDevice>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const m1 = {
+    tag: "Mood 01 · Dunkel",
+    title: "Stadion-Nacht",
+    accent: "#22C55E",
+    accentSoft: "rgba(34,197,94,0.14)",
+    fontDesc: "Archivo (Display, kondensiert) · Inter · JetBrains Mono für Daten",
+    risk: "Niedrig. Iteration vom aktuellen Stand — gleiche Tokens-Struktur, schärfere Hierarchie. Mono-Font für Ticker neu.",
+  };
+  const m1tokens = [
+    { k: "bg", v: "#06090A" },
+    { k: "surface", v: "#0E1416" },
+    { k: "accent / Bolzplatz", v: "#22C55E" },
+    { k: "flood (sek.)", v: "#5EE6E0" },
+    { k: "signal", v: "#FB923C" },
+    { k: "text", v: "#ECF1F0" },
+  ];
+  const m1principles = [
+    "OLED-Schwarz als Basis, drei Layering-Stufen statt grünlicher Tönung",
+    "Cyan als zweiter Akzent für Sondertipps + Status (≠ Match-Aktionen)",
+    "Mono-Font für alle Daten/Ticker — Identität statt Generic-Sans",
+    "Score als Hero, nicht VS-Bubble. Zahlen tragen die Hierarchie.",
+    "Tab-Bar als floating Pill mit Blur",
+  ];
+
+  const m2 = {
+    tag: "Mood 02 · Hell",
+    title: "Bolzplatz-Sommer",
+    accent: "#15803D",
+    accentSoft: "#E8F4EC",
+    fontDesc: "Familjen Grotesk (Display, weich-rund) · Geist (Body)",
+    risk: "Mittel. Light-Mode wird primärer, Schatten statt Border ändert Card-Primitive. Warm-Akzent komplett neu.",
+  };
+  const m2tokens = [
+    { k: "bg / paper", v: "#F4F1EA" },
+    { k: "surface", v: "#FFFFFF" },
+    { k: "accent / Bolzplatz", v: "#15803D" },
+    { k: "warm (sek.)", v: "#E8744E" },
+    { k: "warm soft", v: "#FBE8DD" },
+    { k: "text", v: "#0E1A12" },
+  ];
+  const m2principles = [
+    "Off-White Papier-Background — Sommer, Freundschaft, Kumpel-Tipprunde",
+    "Tor-Orange als zweiter Akzent für Streak/Gamification-Momente",
+    "Schatten + großzügige Radien (24px) statt Border — neue Card-Primitive",
+    "Team-Flaggen-Stripes als visuelle Anker — kein Logo-Recht nötig",
+    "Familjen Grotesk = freundlich aber crisp (Alternative zu ui-rounded)",
+  ];
+
+  const m3 = {
+    tag: "Mood 03 · Editorial",
+    title: "Stadionprogramm",
+    accent: "#0F4D2C",
+    accentSoft: "#D5E5DA",
+    serif: true,
+    fontDesc: "DM Serif Display (Display) · Inter (Body) · JetBrains Mono (Meta)",
+    risk: "Hoch. Komplette Visual-Identity-Verschiebung. Großer Wow-Faktor, aber serif/print-look ist Geschmackssache.",
+  };
+  const m3tokens = [
+    { k: "bg / paper", v: "#EDE7DA" },
+    { k: "surface", v: "#FFFFFE" },
+    { k: "accent / Tann-Grün", v: "#0F4D2C" },
+    { k: "accent soft", v: "#D5E5DA" },
+    { k: "ink", v: "#0F1A12" },
+    { k: "red ink", v: "#A02A2A" },
+  ];
+  const m3principles = [
+    "Bolzplatz-Grün wird tiefer (#0F4D2C) — kontrastreich auf Papier",
+    "Serif Display + Mono Meta = Programmheft / Sport-Magazin",
+    "Sharp corners, dicke Trennlinien, keine Schatten",
+    "Sondertipps als Banner-CTA mit accent-Hintergrund",
+    "Risiko: Polarisiert. Empfehlung: Light-First, Dark als Variante",
+  ];
+
+  const intro = (
+    <div style={{
+      width: 1100, padding: "40px 32px", color: "#fff",
+      fontFamily: "'Inter', system-ui, sans-serif",
+    }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: 1.6,
+        textTransform: "uppercase", color: "#5EE6E0", marginBottom: 10,
+      }}>Bolzify · Design Refresh · Mood Direction</div>
+      <h1 style={{
+        margin: 0, fontFamily: "'Archivo', system-ui, sans-serif", fontSize: 56, fontWeight: 800,
+        letterSpacing: -1.6, lineHeight: 1, marginBottom: 18,
+      }}>Drei Richtungen, ein Bolzplatz-Grün.</h1>
+      <p style={{ fontSize: 17, lineHeight: 1.55, color: "rgba(255,255,255,0.78)", maxWidth: 780, margin: 0 }}>
+        Tab-Struktur und Bolzplatz-Grün bleiben — alles andere darf sich bewegen. Jede
+        Richtung zeigt den Home-Screen vollständig, plus Palette, Typo und Prinzipien.
+        Ziel: <em>eine</em> wählen (oder Aspekte mixen), bevor ich an <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, padding: "2px 6px", background: "rgba(94,230,224,0.12)", color: "#5EE6E0", borderRadius: 4 }}>design.ts</code> + Primitives gehe.
+      </p>
+      <div style={{
+        marginTop: 28, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16,
+        fontSize: 13, lineHeight: 1.5,
+      }}>
+        <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: 1.2, color: "#22C55E", textTransform: "uppercase", marginBottom: 6 }}>01 — Iteration</div>
+          <strong>Stadion-Nacht.</strong> Wenn Look bleiben soll, aber besser sitzen muss. Geringstes Risiko, schnellster Launch.
+        </div>
+        <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: 1.2, color: "#86EFAC", textTransform: "uppercase", marginBottom: 6 }}>02 — Reframe</div>
+          <strong>Bolzplatz-Sommer.</strong> Wenn die App freundlicher und weniger „Tech“ wirken soll. Kumpel-Modus.
+        </div>
+        <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10 }}>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: 1.2, color: "#FB923C", textTransform: "uppercase", marginBottom: 6 }}>03 — Identität</div>
+          <strong>Stadionprogramm.</strong> Wenn Bolzify als Marke aus der Kicktipp-Masse rausstechen soll. Höchstes Risiko, höchster Payoff.
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <window.DesignCanvas title="Bolzify · Mood Directions" subtitle="Wähle eine Richtung — oder kombiniere Aspekte" background="#0F1212">
+      <window.DCSection id="intro" title="Briefing">
+        <window.DCArtboard id="intro-card" label="Übersicht" width={1100} height={360}>
+          {intro}
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="m1" title="01 · Stadion-Nacht">
+        <window.DCArtboard id="m1-board" label="Mood + Home (Dark)" width={920} height={920}>
+          <MoodBoard mood={m1} tokens={m1tokens} dark body="Iteration des aktuellen Looks. OLED-Schwarz wird tiefer, eine zweite Akzent-Hue kommt dazu (Flutlicht-Cyan), Score-Zahlen werden zum Hero. Mono-Font für Daten gibt der App eine Stimme — Tickerschrift, Fußballstudio." font="'Archivo', system-ui, sans-serif" principles={["OLED-Schwarz, drei Layering-Stufen statt grünlicher Tönung","Cyan als zweiter Akzent für Sondertipps + Status (≠ Match-Aktionen)","Mono für Daten/Ticker — Identität statt Generic-Sans","Score-Zahl als Hero, nicht VS-Bubble","Tab-Bar als floating Pill mit Blur"]} ScreenComp={window.StadiumNightHome} />
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="m2" title="02 · Bolzplatz-Sommer">
+        <window.DCArtboard id="m2-board" label="Mood + Home (Light)" width={920} height={920}>
+          <MoodBoard mood={m2} tokens={m2tokens} dark={false} body="Light-Mode wird primär. Cremiger Off-White-Background statt OLED-Schwarz, Tor-Orange als zweiter Akzent. Cards bekommen weiche Schatten statt Border, Radien werden großzügig (24px). Familjen Grotesk als Display: rund-freundlich, aber moderner als ui-rounded." font="'Familjen Grotesk', system-ui, sans-serif" principles={["Off-White Papier-Background — Sommer, Kumpel-Tipprunde","Tor-Orange als zweiter Akzent (Streak, Gamification)","Schatten + große Radien statt Border (neue Card-Primitive)","Team-Flaggen-Stripes als Anker (kein Logo-Recht nötig)","Familjen Grotesk = freundlich aber crisp"]} ScreenComp={window.SummerHome} />
+        </window.DCArtboard>
+      </window.DCSection>
+
+      <window.DCSection id="m3" title="03 · Stadionprogramm">
+        <window.DCArtboard id="m3-board" label="Mood + Home (Editorial)" width={920} height={920}>
+          <MoodBoard mood={m3} tokens={m3tokens} dark={false} body="Editorial / Print-Look. Tann-Grün als Bolzplatz-Variante (kontrastreicher auf Papier), DM Serif Display für Headlines, Mono für Metadaten. Sharp corners, dicke Trennlinien, keine Schatten. Sondertipps werden zum Banner-CTA. Polarisiert — aber unverwechselbar." font="'DM Serif Display', Georgia, serif" principles={["Tann-Grün (#0F4D2C) statt #22C55E — kontrast auf Papier","Serif Display + Mono Meta = Sport-Magazin","Sharp corners, dicke Linien, keine Schatten","Sondertipps als Banner-CTA","Polarisiert — Empfehlung: Light-First"]} ScreenComp={window.ProgrammHome} />
+        </window.DCArtboard>
+      </window.DCSection>
+    </window.DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

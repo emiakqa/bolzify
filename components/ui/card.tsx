@@ -10,7 +10,7 @@ import {
 import { Colors, Radius, Shadow, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-type Variant = 'default' | 'elevated' | 'accent' | 'flat';
+type Variant = 'default' | 'elevated' | 'accent' | 'warm' | 'flat';
 
 type Props = {
   children: ReactNode;
@@ -23,12 +23,16 @@ type Props = {
 };
 
 /**
- * Universelle Card-Komponente. Default sieht modern aus (rund, weicher Border,
- * leicht gehobenes Surface). `accent` für Hero-Karten mit grünem Border-Akzent.
- * `elevated` mit Schatten für Pop-Outs. `flat` ohne Border, nur Surface.
+ * Bolzplatz-Card. Default ist eine surface-Card mit weichem Shadow (statt Border).
  *
- * Wenn `onPress` gesetzt ist, wird die Card pressable und reagiert mit
- * 0.97-Skalierung über Opacity (subtiles Tap-Feedback).
+ * - `default` — surface bg, Shadow.sm
+ * - `elevated` — surface bg, Shadow.lg (Hero-Cards, Modals)
+ * - `accent` — accentSoft bg + accent-Border, KEINE Shadow (info-Boxen)
+ * - `warm` — warmSoft bg + warm-Border, KEINE Shadow (Sondertipps, Streaks)
+ * - `flat` — surface bg + 1px Border, KEINE Shadow (gruppierte Listen)
+ *
+ * Wenn `onPress`/`onLongPress` gesetzt ist, wird die Card pressable mit
+ * subtilem 0.985-scale Tap-Feedback.
  */
 export function Card({
   children,
@@ -43,12 +47,23 @@ export function Card({
   const c = Colors[scheme];
 
   const baseStyle: ViewStyle = {
-    backgroundColor: variant === 'accent' ? c.accentSoft : c.surface,
-    borderRadius: Radius.lg,
+    backgroundColor:
+      variant === 'accent' ? c.accentSoft :
+      variant === 'warm' ? c.warmSoft :
+      c.surface,
+    borderRadius: Radius.xl,
     padding: padding === 0 ? 0 : Spacing[padding],
-    borderWidth: variant === 'flat' ? 0 : 1,
-    borderColor: variant === 'accent' ? c.accentBorder : c.border,
-    ...(variant === 'elevated' ? Shadow.md : null),
+    borderWidth:
+      variant === 'flat' ? 1 :
+      variant === 'accent' || variant === 'warm' ? 1 :
+      0,
+    borderColor:
+      variant === 'accent' ? c.accentBorder :
+      variant === 'warm' ? c.warmBorder :
+      c.border,
+    ...(variant === 'elevated' ? Shadow.lg :
+        variant === 'default' ? Shadow.sm :
+        null),
   };
 
   if (onPress || onLongPress) {
@@ -70,7 +85,6 @@ export function Card({
   return <View style={[baseStyle, style as ViewStyle]}>{children}</View>;
 }
 
-// Re-export für Layout-Helper innerhalb von Cards
 export const CardRow = ({ children, style }: { children: ReactNode; style?: ViewStyle }) => (
   <View style={[styles.row, style]}>{children}</View>
 );

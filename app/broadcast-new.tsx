@@ -7,22 +7,18 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SectionHeader } from '@/components/ui/section-header';
 import {
   Colors,
-  FontSize,
-  FontWeight,
   Fonts,
   LetterSpacing,
-  LineHeight,
   Radius,
   Spacing,
 } from '@/constants/design';
@@ -53,7 +49,6 @@ export default function BroadcastNewScreen() {
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [past, setPast] = useState<Past[]>([]);
 
-  // Admin-Check + Recipient-Count + History gleichzeitig laden
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -144,48 +139,45 @@ export default function BroadcastNewScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.header}>
+        <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
-            <ThemedText
-              style={{
-                color: c.textMuted,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
-                fontFamily: Fonts?.rounded,
-              }}>
-              ← Zurück
-            </ThemedText>
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+              ‹ Zurück
+            </Text>
           </Pressable>
         </View>
         <View style={styles.center}>
-          <ThemedText
+          <Text
             style={{
               color: c.text,
-              fontFamily: Fonts?.rounded,
-              fontSize: FontSize.md,
-              lineHeight: LineHeight.md,
+              fontFamily: Fonts.display.bold,
+              fontSize: 17,
               textAlign: 'center',
               paddingHorizontal: Spacing.xl,
             }}>
             Nur App-Admins können Broadcasts senden.
-          </ThemedText>
-          <ThemedText
+          </Text>
+          <Text
             style={{
               color: c.textFaint,
-              fontFamily: Fonts?.rounded,
-              fontSize: FontSize.sm,
-              lineHeight: LineHeight.sm,
+              fontFamily: Fonts.mono.regular,
+              fontSize: 11,
+              lineHeight: 18,
+              letterSpacing: 0.4,
               textAlign: 'center',
               paddingHorizontal: Spacing.xl,
               marginTop: Spacing.sm,
             }}>
             Im Supabase-SQL-Editor:{'\n'}
             insert into app_admins (user_id) values ({"'"}deine-user-uuid{"'"});
-          </ThemedText>
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  const remaining = MAX_BODY - draft.length;
+  const canSend = !sending && draft.trim().length > 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
@@ -194,17 +186,25 @@ export default function BroadcastNewScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}>
-        <View style={styles.header}>
+        {/* Top bar mit Senden-Action rechts */}
+        <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
-            <ThemedText
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+              Abbrechen
+            </Text>
+          </Pressable>
+          <Text style={{ color: c.text, fontFamily: Fonts.display.bold, fontSize: 15 }}>
+            Broadcast
+          </Text>
+          <Pressable onPress={onSend} disabled={!canSend} hitSlop={12}>
+            <Text
               style={{
-                color: c.textMuted,
-                fontSize: FontSize.md,
-                lineHeight: LineHeight.md,
-                fontFamily: Fonts?.rounded,
+                color: canSend ? c.accent : c.textFaint,
+                fontFamily: Fonts.display.bold,
+                fontSize: 14,
               }}>
-              ← Zurück
-            </ThemedText>
+              {sending ? 'Sende…' : 'Senden'}
+            </Text>
           </Pressable>
         </View>
 
@@ -212,109 +212,144 @@ export default function BroadcastNewScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <ThemedText style={[styles.h1, { color: c.text }]}>Broadcast</ThemedText>
-          <ThemedText
-            style={{
-              color: c.textMuted,
-              fontSize: FontSize.sm,
-              lineHeight: LineHeight.sm,
-              fontFamily: Fonts?.rounded,
-              marginBottom: Spacing.lg,
-            }}>
-            Geht ins Postfach von{' '}
-            <ThemedText style={{ color: c.text, fontWeight: FontWeight.semibold }}>
-              {recipientCount ?? '…'} Usern
-            </ThemedText>
-            . Verwende es sparsam — Update-Ankündigungen, Wartungsfenster, wichtige Hinweise.
-          </ThemedText>
+          {/* "AN"-Audience-Card */}
+          <View>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts.mono.bold,
+                fontSize: 10,
+                letterSpacing: LetterSpacing.label,
+                textTransform: 'uppercase',
+                marginBottom: 8,
+              }}>
+              An
+            </Text>
+            <Card variant="flat" padding="sm">
+              <View style={styles.audienceRow}>
+                <View style={[styles.audienceIcon, { backgroundColor: c.accentSoft }]}>
+                  <Text style={{ color: c.accent, fontFamily: Fonts.display.bold, fontSize: 12 }}>
+                    BZ
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: c.text,
+                      fontFamily: Fonts.display.bold,
+                      fontSize: 14,
+                      letterSpacing: -0.2,
+                    }}>
+                    Alle Bolzify-User
+                  </Text>
+                  <Text
+                    style={{
+                      color: c.textMuted,
+                      fontFamily: Fonts.mono.semibold,
+                      fontSize: 10,
+                      letterSpacing: 0.4,
+                      textTransform: 'uppercase',
+                      marginTop: 2,
+                    }}>
+                    {recipientCount ?? '…'} EMPFÄNGER
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          </View>
 
-          <Card padding="md" style={{ gap: Spacing.sm }}>
-            <TextInput
-              value={draft}
-              onChangeText={(t) => {
-                if (t.length <= MAX_BODY) setDraft(t);
-              }}
-              placeholder="Nachricht an alle User…"
-              placeholderTextColor={c.textFaint}
-              multiline
-              editable={!sending}
-              style={[
-                styles.input,
-                {
-                  color: c.text,
-                  fontFamily: Fonts?.rounded,
-                  borderColor: draft.trim().length > 0 ? c.accentBorder : c.border,
-                  backgroundColor: c.surface,
-                },
-              ]}
-            />
-            <View style={styles.footer}>
-              <ThemedText
+          {/* Nachricht */}
+          <View>
+            <View style={styles.msgHeader}>
+              <Text
                 style={{
-                  color: c.textFaint,
-                  fontSize: FontSize.xs,
-                  lineHeight: LineHeight.xs,
-                  fontFamily: Fonts?.rounded,
+                  color: c.textMuted,
+                  fontFamily: Fonts.mono.bold,
+                  fontSize: 10,
+                  letterSpacing: LetterSpacing.label,
+                  textTransform: 'uppercase',
                 }}>
-                {draft.length}/{MAX_BODY}
-              </ThemedText>
-              <Button
-                label={sending ? 'Sende…' : 'An alle senden'}
-                onPress={onSend}
-                disabled={sending || draft.trim().length === 0}
-                loading={sending}
-                size="md"
-              />
+                Nachricht
+              </Text>
+              <Text
+                style={{
+                  color: remaining < 100 ? c.warm : c.textFaint,
+                  fontFamily: Fonts.mono.semibold,
+                  fontSize: 10,
+                  letterSpacing: 0.4,
+                }}>
+                {draft.length} / {MAX_BODY}
+              </Text>
             </View>
+            <Card variant="flat" padding="md" style={{ minHeight: 180 }}>
+              <TextInput
+                value={draft}
+                onChangeText={(t) => {
+                  if (t.length <= MAX_BODY) setDraft(t);
+                }}
+                placeholder="Nachricht an alle User…"
+                placeholderTextColor={c.textFaint}
+                multiline
+                editable={!sending}
+                style={[
+                  styles.input,
+                  {
+                    color: c.text,
+                    fontFamily: Fonts.body.regular,
+                  },
+                ]}
+              />
+            </Card>
             {error ? (
-              <ThemedText
+              <Text
                 style={{
                   color: c.danger,
-                  fontSize: FontSize.sm,
-                  lineHeight: LineHeight.sm,
-                  fontFamily: Fonts?.rounded,
+                  fontFamily: Fonts.body.medium,
+                  fontSize: 13,
+                  marginTop: Spacing.sm,
                 }}>
                 {error}
-              </ThemedText>
+              </Text>
             ) : null}
-          </Card>
+          </View>
 
-          <SectionHeader title={`Verlauf (${past.length})`} marginTop={Spacing.lg} />
+          {/* Verlauf */}
+          <SectionHeader title={`Verlauf · ${past.length}`} marginTop={Spacing.lg} />
           {past.length === 0 ? (
             <Card padding="md" style={{ alignItems: 'center' }}>
-              <ThemedText
+              <Text
                 style={{
                   color: c.textFaint,
-                  fontFamily: Fonts?.rounded,
-                  fontSize: FontSize.sm,
-                  lineHeight: LineHeight.sm,
+                  fontFamily: Fonts.body.regular,
+                  fontSize: 13,
                 }}>
                 Noch keine Broadcasts gesendet.
-              </ThemedText>
+              </Text>
             </Card>
           ) : (
             <View style={{ gap: Spacing.sm }}>
               {past.map((b) => (
                 <Card key={b.id} padding="md" onLongPress={() => onDelete(b)}>
-                  <ThemedText
+                  <Text
                     style={{
                       color: c.text,
-                      fontSize: FontSize.md,
-                      lineHeight: LineHeight.md,
-                      fontFamily: Fonts?.rounded,
+                      fontFamily: Fonts.body.regular,
+                      fontSize: 14,
+                      lineHeight: 21,
                     }}>
                     {b.body}
-                  </ThemedText>
-                  <ThemedText
+                  </Text>
+                  <Text
                     style={{
                       color: c.textFaint,
-                      fontSize: FontSize.xs,
-                      lineHeight: LineHeight.xs,
-                      fontFamily: Fonts?.rounded,
-                      marginTop: Spacing.xs,
+                      fontFamily: Fonts.mono.semibold,
+                      fontSize: 10,
+                      letterSpacing: 0.6,
+                      textTransform: 'uppercase',
+                      marginTop: 6,
                     }}>
-                    {formatRelativeTime(b.created_at)} · long-press zum Löschen
-                  </ThemedText>
+                    {formatRelativeTime(b.created_at)} · LONG-PRESS ZUM LÖSCHEN
+                  </Text>
                 </Card>
               ))}
             </View>
@@ -326,34 +361,40 @@ export default function BroadcastNewScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo },
+  scroll: { padding: Spacing.lg, paddingBottom: Spacing.jumbo, gap: Spacing.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: {
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingVertical: Spacing.md,
   },
-  h1: {
-    fontSize: FontSize.xxl,
-    lineHeight: LineHeight.xxl,
-    fontWeight: FontWeight.heavy,
-    fontFamily: Fonts?.rounded,
-    letterSpacing: LetterSpacing.heading,
-    marginBottom: Spacing.sm,
-  },
-  input: {
-    minHeight: 120,
-    maxHeight: 280,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    fontSize: FontSize.md,
-    lineHeight: LineHeight.md,
-    textAlignVertical: 'top',
-  },
-  footer: {
+  audienceRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+  },
+  audienceIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  msgHeader: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  input: {
+    minHeight: 160,
+    maxHeight: 280,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlignVertical: 'top',
+    padding: 0,
+    borderRadius: Radius.md,
   },
 });

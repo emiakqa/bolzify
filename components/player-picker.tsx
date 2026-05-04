@@ -242,7 +242,7 @@ export function PlayerPicker({ visible, onClose, onSelect, groups, selectedId }:
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}>
-              <ThemedText style={[styles.sectionHeaderText, { color: c.nostalgia }]}>
+              <ThemedText style={[styles.sectionHeaderText, { color: c.warm }]}>
                 {section.title}
               </ThemedText>
               <ThemedText style={{ color: c.textFaint, fontSize: FontSize.xs }}>

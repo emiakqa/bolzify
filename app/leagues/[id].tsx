@@ -66,6 +66,7 @@ export default function LeagueDetailScreen() {
 
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [memberTotal, setMemberTotal] = useState<number | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
@@ -97,13 +98,30 @@ export default function LeagueDetailScreen() {
     }
     setLeague(lg);
 
+    // Hard cap auf 200 Members. Falls eine Liga das je übersteigt, sehen
+    // wir's an einem Truncated-Footer und in Sentry — dann wäre Real-
+    // Pagination nötig. Für MVP-Ligen (Familie, Freunde, Büro) ist 200
+    // weit jenseits realistischer Größen.
+    const MEMBERS_CAP = 200;
     const { data: mems, error: memErr } = await supabase
       .from('league_members')
       .select('user_id, joined_at')
       .eq('league_id', id)
-      .order('joined_at');
+      .order('joined_at')
+      .limit(MEMBERS_CAP);
 
     if (memErr) throw new Error(`league_members select: ${memErr.message}`);
+
+    // Wenn der Cap erreicht ist, fragen wir den echten Count separat ab,
+    // damit wir dem User „X von Y" zeigen können statt zu lügen.
+    let totalMembers: number | null = null;
+    if ((mems ?? []).length >= MEMBERS_CAP) {
+      const { count } = await supabase
+        .from('league_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('league_id', id);
+      totalMembers = count ?? null;
+    }
 
     const userIds = (mems ?? []).map((m) => m.user_id);
     const profileMap = new Map<string, string>();
@@ -153,6 +171,7 @@ export default function LeagueDetailScreen() {
     });
 
     setMembers(enriched);
+    setMemberTotal(totalMembers);
 
     const { data: annRows, error: annErr } = await supabase
       .from('league_announcements')
@@ -610,8 +629,15 @@ export default function LeagueDetailScreen() {
             </View>
           )}
 
-          {/* Ranking-Header-Row */}
-          <SectionHeader title={`Tabelle · ${members.length}`} marginTop={Spacing.lg} />
+          {/* Ranking-Header-Row — bei Truncation echten Total mitziehen */}
+          <SectionHeader
+            title={
+              memberTotal && memberTotal > members.length
+                ? `Tabelle · Top ${members.length} von ${memberTotal}`
+                : `Tabelle · ${members.length}`
+            }
+            marginTop={Spacing.lg}
+          />
           <View style={styles.rankHeader}>
             <Text style={[styles.rankHeaderCell, { color: c.textFaint, width: 28 }]}>#</Text>
             <Text
@@ -714,6 +740,21 @@ export default function LeagueDetailScreen() {
                 </View>
               );
             })}
+            {memberTotal && memberTotal > members.length ? (
+              <View style={{ paddingTop: Spacing.md, alignItems: 'center' }}>
+                <Text
+                  style={{
+                    color: c.textFaint,
+                    fontFamily: Fonts.mono.semibold,
+                    fontSize: 11,
+                    letterSpacing: 0.4,
+                    textTransform: 'uppercase',
+                    textAlign: 'center',
+                  }}>
+                  + {memberTotal - members.length} weitere
+                </Text>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import 'react-native-reanimated';
 
+import { OfflineBanner } from '@/components/ui/offline-banner';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, isPlaceholderUsername, useAuth } from '@/lib/auth';
 import { useAppFonts } from '@/lib/fonts';
@@ -141,6 +142,7 @@ function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
+        <OfflineBanner />
         <AuthGate />
         <StatusBar style="auto" />
       </AuthProvider>

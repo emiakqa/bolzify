@@ -184,7 +184,21 @@ export default function TipScreen() {
         { onConflict: 'user_id,match_id' },
       );
       if (err) {
-        setError(err.message);
+        // Wenn der RLS-Check serverseitig zuschlägt (kickoff_at <= now()),
+        // zeigt Supabase "violates row-level security policy". Das passiert
+        // bei der 1-Sekunde-vor-Anpfiff-Race: Client hatte das Match noch
+        // als tippbar, der Server schon nicht mehr. Echte Botschaft statt
+        // RLS-Jargon zeigen.
+        const lower = (err.message ?? '').toLowerCase();
+        const looksLikeKickoffLock =
+          lower.includes('row-level security') ||
+          lower.includes('row level security') ||
+          (lower.includes('policy') && lower.includes('tips'));
+        if (looksLikeKickoffLock) {
+          setError('Anpfiff ist schon durch — Tipps für dieses Match sind gesperrt.');
+        } else {
+          setError(err.message);
+        }
         return;
       }
       setSaved(true);

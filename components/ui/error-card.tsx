@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Colors, FontSize, Fonts, LineHeight, Spacing } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { looksLikeOfflineError, useIsOnline } from '@/lib/network';
 
 type Props = {
   /**
@@ -14,34 +15,40 @@ type Props = {
   /** Wenn gesetzt, wird ein "Nochmal versuchen"-Button gerendert. */
   onRetry?: () => void;
   retryLabel?: string;
-  /** Hauptzeile (Default: freundlicher Netzwerk-Hinweis). */
+  /** Hauptzeile. Default richtet sich automatisch nach Offline/Online. */
   title?: string;
 };
-
-const DEFAULT_TITLE = 'Konnte gerade nicht laden.';
-const DEFAULT_HINT = 'Bitte Internet checken oder gleich nochmal probieren.';
 
 /**
  * Wiederverwendbare Fehler-Card für Screens, die per Supabase-Query Daten
  * laden. Zeigt eine freundliche Botschaft + optional einen Retry-Button.
+ *
+ * Differenzierung Offline vs. Server-Fehler:
+ *   - Offline (laut NetInfo) ODER Fehler-Message riecht nach Netz-Problem:
+ *       📡 + "Du bist offline." + Hinweis zum Netz-Check
+ *   - Sonst:
+ *       ⚠ + "Konnte gerade nicht laden." + Hinweis zum erneuten Probieren
  *
  * Convention im Bolzify-Codebase:
  *   {error ? (
  *     <ErrorCard message={error} onRetry={load} />
  *   ) : loading ? <ActivityIndicator /> : <NormalContent />}
  */
-export function ErrorCard({
-  message,
-  onRetry,
-  retryLabel = 'Nochmal versuchen',
-  title = DEFAULT_TITLE,
-}: Props) {
+export function ErrorCard({ message, onRetry, retryLabel = 'Nochmal versuchen', title }: Props) {
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
+  const online = useIsOnline();
+
+  const offline = !online || looksLikeOfflineError(message);
+  const icon = offline ? '📡' : '⚠';
+  const heading = title ?? (offline ? 'Du bist offline.' : 'Konnte gerade nicht laden.');
+  const hint = offline
+    ? 'Sobald wieder Netz da ist, einfach erneut versuchen.'
+    : 'Wir konnten den Server gerade nicht erreichen. Gleich nochmal probieren.';
 
   return (
     <Card variant="default" padding="lg" style={{ alignItems: 'center', gap: Spacing.md }}>
-      <Text style={{ fontSize: 36, lineHeight: 44 }}>📡</Text>
+      <Text style={{ fontSize: 36, lineHeight: 44 }}>{icon}</Text>
       <Text
         style={{
           color: c.text,
@@ -50,7 +57,7 @@ export function ErrorCard({
           lineHeight: LineHeight.lg,
           textAlign: 'center',
         }}>
-        {title}
+        {heading}
       </Text>
       <Text
         style={{
@@ -60,9 +67,9 @@ export function ErrorCard({
           lineHeight: LineHeight.sm,
           textAlign: 'center',
         }}>
-        {DEFAULT_HINT}
+        {hint}
       </Text>
-      {message && message.length < 200 ? (
+      {!offline && message && message.length < 200 ? (
         <Text
           style={{
             color: c.textFaint,

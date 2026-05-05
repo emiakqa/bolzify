@@ -1,6 +1,8 @@
+import NetInfo from '@react-native-community/netinfo';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { captureException } from '@/lib/sentry';
 import type { Database } from '@/types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -79,6 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         timeout = null;
       }
 
+      // TOKEN_REFRESHED feuert wenn Supabase den Access-Token frisch holen
+      // konnte — das ist der gewünschte Pfad. Wir loggen es nur, der State
+      // wird wie gewohnt durch setSession aktualisiert. Wenn Refresh
+      // fehlschlägt, fired Supabase stattdessen SIGNED_OUT mit newSession=null
+      // — der bestehende `else`-Zweig unten räumt dann das Profile auf.
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('[Auth] token refreshed successfully');
+      }
+
       setSession(newSession);
       // Loading SOFORT flippen, damit die App rendert. Auf den Profile-Load
       // warten wir hier NICHT — siehe Kommentar unten.
@@ -113,10 +124,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Wenn das Netz von offline → online wechselt, forcieren wir einen
+    // Session-Refresh. Sonst kann es passieren dass der Token während der
+    // Offline-Phase abgelaufen ist, der Client aber weiterhin glaubt er sei
+    // eingeloggt. refreshSession löst das sauber auf:
+    //   - Token noch gültig oder erfolgreich aktualisiert → kein Event
+    //   - Refresh-Token verfallen / Account gelöscht → SIGNED_OUT-Event,
+    //     onAuthStateChange räumt oben auf → User landet auf Login.
+    let lastOnline: boolean | null = null;
+    const netSub = NetInfo.addEventListener((state) => {
+      const online = state.isConnected !== false && state.isInternetReachable !== false;
+      if (lastOnline === false && online) {
+        console.log('[Auth] network back online → refreshing session');
+        supabase.auth.refreshSession().catch((err) => {
+          console.warn('[Auth] refreshSession after reconnect failed', err);
+          captureException(err, { source: 'auth-refresh-after-reconnect' });
+        });
+      }
+      lastOnline = online;
+    });
+
     return () => {
       mounted = false;
       if (timeout) clearTimeout(timeout);
       sub.subscription.unsubscribe();
+      netSub();
     };
   }, []);
 

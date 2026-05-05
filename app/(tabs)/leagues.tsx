@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ErrorCard } from '@/components/ui/error-card';
 import {
   Colors,
   Fonts,
@@ -43,26 +44,24 @@ export default function LeaguesScreen() {
   const [leagues, setLeagues] = useState<LeagueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
     if (!userId) return;
+    setError(null);
+    try {
 
     const { data: memberRows, error: memErr } = await supabase
       .from('league_members')
       .select('league_id')
       .eq('user_id', userId);
 
-    if (memErr) {
-      setLeagues([]);
-      setLoading(false);
-      return;
-    }
+    if (memErr) throw new Error(memErr.message);
 
     const ids = (memberRows ?? []).map((r) => r.league_id);
     if (ids.length === 0) {
       setLeagues([]);
-      setLoading(false);
       return;
     }
 
@@ -72,11 +71,7 @@ export default function LeaguesScreen() {
       .in('id', ids)
       .order('created_at', { ascending: false });
 
-    if (lgErr) {
-      setLeagues([]);
-      setLoading(false);
-      return;
-    }
+    if (lgErr) throw new Error(lgErr.message);
 
     // Member-Counts
     const { data: counts } = await supabase
@@ -130,7 +125,12 @@ export default function LeaguesScreen() {
         };
       }),
     );
-    setLoading(false);
+    } catch (err) {
+      console.error('[leagues] load failed', err);
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useFocusEffect(
@@ -141,8 +141,11 @@ export default function LeaguesScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -180,7 +183,9 @@ export default function LeaguesScreen() {
           />
         </View>
 
-        {loading ? (
+        {error && leagues.length === 0 ? (
+          <ErrorCard message={error} onRetry={load} />
+        ) : loading ? (
           <Card>
             <ActivityIndicator color={c.textMuted} />
           </Card>

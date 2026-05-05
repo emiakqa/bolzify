@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ErrorCard } from '@/components/ui/error-card';
 import { TeamFlag } from '@/components/ui/team-flag';
 import {
   Colors,
@@ -59,6 +60,7 @@ export default function MyTipsScreen() {
   const [specialPoints, setSpecialPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
@@ -68,7 +70,8 @@ export default function MyTipsScreen() {
       setLoading(false);
       return;
     }
-
+    setError(null);
+    try {
     const tournament = await getCurrentTournament();
 
     const specialPromise = supabase
@@ -91,7 +94,6 @@ export default function MyTipsScreen() {
 
     if (!tipRows || tipRows.length === 0) {
       setSections([]);
-      setLoading(false);
       return;
     }
 
@@ -176,7 +178,12 @@ export default function MyTipsScreen() {
     if (open.length > 0) next.push({ title: `Offen · ${open.length}`, data: open });
     if (finished.length > 0) next.push({ title: `Gespielt · ${finished.length}`, data: finished });
     setSections(next);
-    setLoading(false);
+    } catch (err) {
+      console.error('[my-tips] load failed', err);
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useFocusEffect(
@@ -187,9 +194,22 @@ export default function MyTipsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
+
+  if (error && sections.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
+        <View style={[styles.scroll]}>
+          <ErrorCard message={error} onRetry={load} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (

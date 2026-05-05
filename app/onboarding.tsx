@@ -39,6 +39,11 @@ const slides = [
     body: 'Genauer Endstand = 6 Punkte · nur Tordifferenz = 4 · nur Tendenz = 2. Richtiger Torschütze gibt +3 Bonus.',
   },
   {
+    emoji: '🌟',
+    title: 'Wage die großen Tipps',
+    body: 'Vor Anpfiff Weltmeister, Torschützenkönig und Gruppensieger setzen — bis zu 76 Bonuspunkte. Sobald der Ball rollt, sind sie fixiert.',
+  },
+  {
     emoji: '🏆',
     title: 'Spiel gegen Freunde',
     body: 'Leg eine Liga an, teile den Code per WhatsApp, und das Ranking läuft automatisch. So oft du willst, kostenlos.',

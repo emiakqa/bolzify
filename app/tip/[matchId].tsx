@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,6 +16,7 @@ import { PickerGroup, PickerPlayer, PlayerPicker } from '@/components/player-pic
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ErrorCard } from '@/components/ui/error-card';
 import { TeamFlag } from '@/components/ui/team-flag';
 import {
   Colors,
@@ -70,13 +71,16 @@ export default function TipScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [now, setNow] = useState(Date.now());
 
-  useEffect(() => {
-    (async () => {
-      if (!matchId || !user) return;
-      const numericId = Number(matchId);
+  const load = useCallback(async () => {
+    if (!matchId || !user) return;
+    setLoadError(null);
+    setLoading(true);
+    const numericId = Number(matchId);
+    try {
 
       const { data: m } = await supabase
         .from('matches')
@@ -136,9 +140,17 @@ export default function TipScreen() {
           if (p) setScorer(p);
         }
       }
+    } catch (err) {
+      console.error('[tip] load failed', err);
+      setLoadError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
       setLoading(false);
-    })();
+    }
   }, [matchId, user]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60_000);
@@ -158,27 +170,52 @@ export default function TipScreen() {
     if (!user || !match) return;
     setError(null);
     setSaving(true);
-    const { error: err } = await supabase.from('tips').upsert(
-      {
-        user_id: user.id,
-        match_id: match.id,
-        home_goals: home,
-        away_goals: away,
-        first_scorer: scorer?.name ?? null,
-        first_scorer_id: scorer?.id ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,match_id' },
-    );
-    setSaving(false);
-    if (err) {
-      setError(err.message);
-      return;
+    try {
+      const { error: err } = await supabase.from('tips').upsert(
+        {
+          user_id: user.id,
+          match_id: match.id,
+          home_goals: home,
+          away_goals: away,
+          first_scorer: scorer?.name ?? null,
+          first_scorer_id: scorer?.id ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,match_id' },
+      );
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      setSaved(true);
+      cancelReminder(match.id).catch(() => {});
+      setTimeout(() => router.back(), 600);
+    } catch (err) {
+      console.error('[tip] submit failed', err);
+      setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen');
+    } finally {
+      setSaving(false);
     }
-    setSaved(true);
-    cancelReminder(match.id).catch(() => {});
-    setTimeout(() => router.back(), 600);
   };
+
+  if (loadError && !match) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+              ‹ Zurück
+            </Text>
+          </Pressable>
+          <View style={{ width: 50 }} />
+        </View>
+        <View style={[styles.loadingWrap, { padding: Spacing.lg }]}>
+          <ErrorCard message={loadError} onRetry={load} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (

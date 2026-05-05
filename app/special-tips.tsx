@@ -1,5 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,6 +14,7 @@ import { PickerGroup, PickerPlayer, PlayerPicker } from '@/components/player-pic
 import { PickerTeam, TeamPicker } from '@/components/team-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ErrorCard } from '@/components/ui/error-card';
 import { TeamFlag } from '@/components/ui/team-flag';
 import {
   Colors,
@@ -84,11 +85,13 @@ export default function SpecialTipsScreen() {
   });
 
   const [openPicker, setOpenPicker] = useState<Slot | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      if (!user) return;
-
+  const load = useCallback(async () => {
+    if (!user) return;
+    setLoadError(null);
+    setLoading(true);
+    try {
       const t = await getCurrentTournament();
       setTournament(t);
 
@@ -195,10 +198,17 @@ export default function SpecialTipsScreen() {
           .sort((a, b) => a.teamName.localeCompare(b.teamName, 'de'));
         setPlayerGroups(playerGrps);
       }
-
+    } catch (err) {
+      console.error('[special-tips] load failed', err);
+      setLoadError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
       setLoading(false);
-    })();
+    }
   }, [user]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // Countdown live updaten
   useEffect(() => {
@@ -240,66 +250,79 @@ export default function SpecialTipsScreen() {
     if (!user || !tournament) return;
     setError(null);
     setSaving(true);
+    try {
+      const { error: err } = await supabase.from('special_tips').upsert(
+        {
+          user_id: user.id,
+          tournament,
+          champion_team_id: state.champion?.id ?? null,
+          runner_up_team_id: state.runner_up?.id ?? null,
+          semifinalist_a_team_id: state.semifinalist_a?.id ?? null,
+          semifinalist_b_team_id: state.semifinalist_b?.id ?? null,
+          top_scorer_player_id: state.top_scorer?.id ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,tournament' },
+      );
 
-    const { error: err } = await supabase.from('special_tips').upsert(
-      {
-        user_id: user.id,
-        tournament,
-        champion_team_id: state.champion?.id ?? null,
-        runner_up_team_id: state.runner_up?.id ?? null,
-        semifinalist_a_team_id: state.semifinalist_a?.id ?? null,
-        semifinalist_b_team_id: state.semifinalist_b?.id ?? null,
-        top_scorer_player_id: state.top_scorer?.id ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,tournament' },
-    );
+      if (err) {
+        setError(err.message);
+        return;
+      }
 
-    if (err) {
+      const filledLetters = Object.keys(groupPicks).filter((l) => groupPicks[l]);
+      const emptyLetters = Object.keys(groupPicks).filter((l) => !groupPicks[l]);
+
+      if (emptyLetters.length > 0) {
+        const { error: delErr } = await supabase
+          .from('group_winner_tips')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('tournament', tournament)
+          .in('group_letter', emptyLetters);
+        if (delErr) {
+          setError(delErr.message);
+          return;
+        }
+      }
+
+      if (filledLetters.length > 0) {
+        const rows = filledLetters.map((letter) => ({
+          user_id: user.id,
+          tournament,
+          group_letter: letter,
+          team_id: groupPicks[letter]!.id,
+          updated_at: new Date().toISOString(),
+        }));
+        const { error: upErr } = await supabase
+          .from('group_winner_tips')
+          .upsert(rows, { onConflict: 'user_id,tournament,group_letter' });
+        if (upErr) {
+          setError(upErr.message);
+          return;
+        }
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (err) {
+      console.error('[special-tips] submit failed', err);
+      setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen');
+    } finally {
       setSaving(false);
-      setError(err.message);
-      return;
     }
-
-    const filledLetters = Object.keys(groupPicks).filter((l) => groupPicks[l]);
-    const emptyLetters = Object.keys(groupPicks).filter((l) => !groupPicks[l]);
-
-    if (emptyLetters.length > 0) {
-      const { error: delErr } = await supabase
-        .from('group_winner_tips')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('tournament', tournament)
-        .in('group_letter', emptyLetters);
-      if (delErr) {
-        setSaving(false);
-        setError(delErr.message);
-        return;
-      }
-    }
-
-    if (filledLetters.length > 0) {
-      const rows = filledLetters.map((letter) => ({
-        user_id: user.id,
-        tournament,
-        group_letter: letter,
-        team_id: groupPicks[letter]!.id,
-        updated_at: new Date().toISOString(),
-      }));
-      const { error: upErr } = await supabase
-        .from('group_winner_tips')
-        .upsert(rows, { onConflict: 'user_id,tournament,group_letter' });
-      if (upErr) {
-        setSaving(false);
-        setError(upErr.message);
-        return;
-      }
-    }
-
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
   };
+
+  if (loadError && !tournament) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={[styles.loadingWrap, { padding: Spacing.lg }]}>
+          <ErrorCard message={loadError} onRetry={load} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (

@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { ErrorCard } from '@/components/ui/error-card';
 import { TeamFlag } from '@/components/ui/team-flag';
 import {
   Colors,
@@ -80,9 +81,12 @@ export default function MatchesScreen() {
   const [logos, setLogos] = useState<Map<number, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
+    setError(null);
+    try {
     const tournament = await getCurrentTournament();
     const { data } = await supabase
       .from('matches')
@@ -138,7 +142,12 @@ export default function MatchesScreen() {
       }
       setTips(map);
     }
-    setLoading(false);
+    } catch (err) {
+      console.error('[matches] load failed', err);
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -164,9 +173,22 @@ export default function MatchesScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
+
+  if (error && matches.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
+        <View style={[styles.scroll, { paddingTop: Spacing.xxl }]}>
+          <ErrorCard message={error} onRetry={load} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (

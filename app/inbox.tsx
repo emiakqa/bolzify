@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/ui/card';
+import { ErrorCard } from '@/components/ui/error-card';
 import {
   Colors,
   Fonts,
@@ -33,12 +34,20 @@ export default function InboxScreen() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
-    const list = await loadInbox(user.id);
-    setItems(list);
-    setLoading(false);
+    setError(null);
+    try {
+      const list = await loadInbox(user.id);
+      setItems(list);
+    } catch (err) {
+      console.error('[inbox] load failed', err);
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useFocusEffect(
@@ -49,8 +58,11 @@ export default function InboxScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const onItemPress = async (item: InboxItem) => {
@@ -91,6 +103,25 @@ export default function InboxScreen() {
   };
 
   const unreadCount = items.filter((i) => !i.read_at).length;
+
+  if (error && items.length === 0) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+              ‹ Zurück
+            </Text>
+          </Pressable>
+          <View style={{ width: 50 }} />
+        </View>
+        <View style={[styles.center, { padding: Spacing.lg }]}>
+          <ErrorCard message={error} onRetry={load} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (

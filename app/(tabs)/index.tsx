@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ErrorCard } from '@/components/ui/error-card';
 import { SectionHeader } from '@/components/ui/section-header';
 import { TeamFlag } from '@/components/ui/team-flag';
 import {
@@ -78,10 +79,13 @@ export default function HomeScreen() {
   const [specialStatus, setSpecialStatus] = useState<SpecialTipsStatus>({ filled: 0, total: 5 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
 
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
+    setError(null);
+    try {
     const tournament = await getCurrentTournament();
     const { data: matches } = await supabase
       .from('matches')
@@ -191,8 +195,12 @@ export default function HomeScreen() {
         setMyLeagues([]);
       }
     }
-
-    setLoading(false);
+    } catch (err) {
+      console.error('[home] load failed', err);
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -206,8 +214,11 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const initials = (profile?.username ?? '??').slice(0, 2).toUpperCase();
@@ -297,7 +308,11 @@ export default function HomeScreen() {
         ) : null}
 
         {/* Match-Hero (Score-as-Hero) */}
-        {loading ? (
+        {error ? (
+          <View style={{ marginTop: Spacing.md }}>
+            <ErrorCard message={error} onRetry={load} />
+          </View>
+        ) : loading ? (
           <Card padding="lg" style={{ marginTop: Spacing.md }}>
             <ActivityIndicator color={c.textMuted} />
           </Card>

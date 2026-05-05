@@ -80,6 +80,8 @@ export default function LeagueDetailScreen() {
       setLoading(false);
       return;
     }
+    setErrorMsg(null);
+    try {
 
     const { data: lg, error: lgErr } = await supabase
       .from('leagues')
@@ -87,20 +89,13 @@ export default function LeagueDetailScreen() {
       .eq('id', id)
       .maybeSingle();
 
-    if (lgErr) {
-      setLeague(null);
-      setErrorMsg(`leagues select: ${lgErr.message}`);
-      setLoading(false);
-      return;
-    }
+    if (lgErr) throw new Error(`leagues select: ${lgErr.message}`);
     if (!lg) {
       setLeague(null);
       setErrorMsg(`Keine Liga mit ID ${id} sichtbar — RLS blockiert oder Liga existiert nicht.`);
-      setLoading(false);
       return;
     }
     setLeague(lg);
-    setErrorMsg(null);
 
     const { data: mems, error: memErr } = await supabase
       .from('league_members')
@@ -108,12 +103,7 @@ export default function LeagueDetailScreen() {
       .eq('league_id', id)
       .order('joined_at');
 
-    if (memErr) {
-      setMembers([]);
-      setErrorMsg(`league_members select: ${memErr.message}`);
-      setLoading(false);
-      return;
-    }
+    if (memErr) throw new Error(`league_members select: ${memErr.message}`);
 
     const userIds = (mems ?? []).map((m) => m.user_id);
     const profileMap = new Map<string, string>();
@@ -195,8 +185,12 @@ export default function LeagueDetailScreen() {
         })),
       );
     }
-
-    setLoading(false);
+    } catch (err) {
+      console.error('[league-detail] load failed', err);
+      setErrorMsg(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useFocusEffect(
@@ -207,8 +201,11 @@ export default function LeagueDetailScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const onShare = async () => {

@@ -76,6 +76,14 @@
           "color": "#22c55e",
           "defaultChannel": "tip-reminders"
         }
+      ],
+      [
+        "@sentry/react-native",
+        {
+          "organization": "bolzify",
+          "project": "react-native",
+          "url": "https://de.sentry.io/"
+        }
       ]
     ],
     "experiments": {

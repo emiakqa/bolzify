@@ -32,6 +32,7 @@ import {
   syncReminders,
 } from '@/lib/notifications';
 import { resetOnboarding } from '@/lib/onboarding';
+import { captureException } from '@/lib/sentry';
 import { clearLocalSession, supabase } from '@/lib/supabase';
 
 const PRIVACY_URL = 'https://emiakqa.github.io/bolzify/privacy.html';
@@ -220,6 +221,7 @@ export default function SettingsScreen() {
             onPress={() => Linking.openURL(SUPPORT_URL).catch(() => {})}
             c={c}
           />
+          <Row icon="≣" label="Nutzungsbedingungen" onPress={() => router.push('/terms')} c={c} />
           <Row icon="◯" label="Impressum" onPress={() => router.push('/impressum')} c={c} last />
         </Group>
 
@@ -254,6 +256,22 @@ export default function SettingsScreen() {
                 Alert.alert(
                   'Session gelöscht',
                   'Bitte App im Task-Switcher schließen und neu öffnen.',
+                );
+              }}
+              c={c}
+              value="DEV"
+            />
+            <Row
+              icon="✗"
+              label="Sentry: Test-Capture"
+              onPress={() => {
+                captureException(new Error('Bolzify Sentry test from settings'), {
+                  source: 'settings-dev-button',
+                  ts: new Date().toISOString(),
+                });
+                Alert.alert(
+                  'Sentry Test',
+                  'Test-Error wurde gesendet (nur in Production-Build sichtbar in sentry.io).',
                 );
               }}
               c={c}

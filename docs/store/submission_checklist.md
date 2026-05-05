@@ -99,11 +99,12 @@ Ziel-Submission: spätestens **2026-05-25** (TestFlight Beta) → **2026-06-04**
 - [ ] Nutzer kann Daten-Löschung anfordern: **Ja** (in-app)
 
 ### DSGVO / EU
-- [ ] Privacy-Policy live unter `https://emiakqa.github.io/bolzify/privacy.html`
-- [ ] Impressum live unter `https://emiakqa.github.io/bolzify/impressum.html`
+- [x] Privacy-Policy live unter `https://emiakqa.github.io/bolzify/privacy.html`
+- [x] Impressum live unter `https://emiakqa.github.io/bolzify/impressum.html`
+- [x] Nutzungsbedingungen live unter `https://emiakqa.github.io/bolzify/terms.html`
 - [ ] Auftragsverarbeitungsvertrag mit Supabase abgeschlossen
-- [ ] Liste der Subprozessoren dokumentiert (Supabase, Expo/EAS, Apple, Google)
-- [ ] `[NAME]`, `[STRASSE]`, `[KONTAKT_EMAIL]` in allen drei HTML-Files ersetzt
+- [x] Liste der Subprozessoren dokumentiert (Supabase, Expo/EAS, Sentry, Apple, Google)
+- [x] `[NAME]`, `[STRASSE]`, `[KONTAKT_EMAIL]` in allen HTML-Files ersetzt
 
 ## 4. Export-Compliance & Rechtliches
 
@@ -149,7 +150,7 @@ Ziel-Submission: spätestens **2026-05-25** (TestFlight Beta) → **2026-06-04**
 - [ ] Android: Production-Release auf "Halt" oder Rollout-Schedule
 - [ ] Launch-Termin **2026-06-11 — 17:00 MEZ** (1h vor erstem WM-Anpfiff)
 - [ ] Social-Media-Push vorbereitet
-- [ ] Monitoring: Sentry / Supabase-Logs / Crashlytics-Alarm aktiv
+- [ ] Monitoring: Sentry-DSN gesetzt + Test-Capture in Production-Build verifiziert (siehe `docs/sentry-setup.md`)
 
 ---
 

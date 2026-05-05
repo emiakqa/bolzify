@@ -10,6 +10,10 @@ import { AuthProvider, isPlaceholderUsername, useAuth } from '@/lib/auth';
 import { useAppFonts } from '@/lib/fonts';
 import { clearAllReminders, syncReminders } from '@/lib/notifications';
 import { hasSeenOnboarding, subscribeOnboarding } from '@/lib/onboarding';
+import { clearSentryUser, initSentry, sentryWrap, setSentryUser } from '@/lib/sentry';
+
+// Init früh — vor dem ersten Render, damit auch Crashes im Splash erfasst werden.
+initSentry();
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -83,8 +87,10 @@ function AuthGate() {
   useEffect(() => {
     if (!userId) {
       clearAllReminders().catch(() => {});
+      clearSentryUser();
       return;
     }
+    setSentryUser(userId);
     syncReminders(userId).catch(() => {});
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') syncReminders(userId).catch(() => {});
@@ -116,12 +122,13 @@ function AuthGate() {
       <Stack.Screen name="inbox" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="broadcast-new" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="impressum" options={{ headerShown: false }} />
+      <Stack.Screen name="terms" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
     </Stack>
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const colorScheme = useColorScheme();
   const [fontsLoaded] = useAppFonts();
 
@@ -140,3 +147,9 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+// Sentry.wrap aktiviert Auto-Performance-Tracking für Navigation und sorgt
+// dafür, dass Errors aus Suspense / ErrorBoundaries automatisch gemeldet werden.
+// Wenn Sentry nicht initialisiert ist (kein DSN), gibt der Wrapper die Komponente
+// unverändert zurück — also safe für Dev ohne Sentry-Account.
+export default sentryWrap(RootLayout);

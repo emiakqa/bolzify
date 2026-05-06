@@ -29,6 +29,7 @@ import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
 import { getCurrentTournament } from '@/lib/current-tournament';
 import { Group, getTournamentGroups } from '@/lib/groups';
+import { cancelSpecialTipReminder } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 
 type Slot =
@@ -304,6 +305,9 @@ export default function SpecialTipsScreen() {
       }
 
       setSaved(true);
+      // Sondertipp ist abgegeben → der morgens-vor-Anpfiff-Reminder wird
+      // hinfällig. Idempotent, also safe auch wenn der gar nie geplant war.
+      cancelSpecialTipReminder().catch(() => {});
       setTimeout(() => setSaved(false), 1500);
     } catch (err) {
       console.error('[special-tips] submit failed', err);

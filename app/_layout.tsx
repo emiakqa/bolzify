@@ -1,4 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -9,7 +10,7 @@ import { OfflineBanner } from '@/components/ui/offline-banner';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, isPlaceholderUsername, useAuth } from '@/lib/auth';
 import { useAppFonts } from '@/lib/fonts';
-import { clearAllReminders, syncReminders } from '@/lib/notifications';
+import { clearAllReminders, notificationToRoute, syncReminders } from '@/lib/notifications';
 import { hasSeenOnboarding, subscribeOnboarding } from '@/lib/onboarding';
 import { clearSentryUser, initSentry, sentryWrap, setSentryUser } from '@/lib/sentry';
 
@@ -81,7 +82,7 @@ function AuthGate() {
     if (onLogin || onSetUsername || onOnboarding) router.replace('/');
   }, [loading, session, profile, segments, router, onboardingSeen]);
 
-  // Notification-Sync: plant Reminders 1h vor Kickoff für alle untippten Matches.
+  // Notification-Sync: plant Reminders vor Kickoff für alle untippten Matches.
   // Läuft einmal bei Login und jedes Mal, wenn die App aus dem Hintergrund kommt
   // (falls der User in der Zwischenzeit woanders getippt hat).
   const userId = session?.user?.id ?? null;
@@ -98,6 +99,39 @@ function AuthGate() {
     });
     return () => sub.remove();
   }, [userId]);
+
+  // Deep-Link bei Tap auf Notification: matchId → /tip/[id], special →
+  // /special-tips. Greift NUR wenn der User eingeloggt + onboarded ist —
+  // sonst routet AuthGate eh nach /login bzw. /onboarding.
+  useEffect(() => {
+    if (!session || onboardingSeen !== true) return;
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as
+        | Record<string, unknown>
+        | null
+        | undefined;
+      const route = notificationToRoute(data);
+      if (route) {
+        router.push(route as never);
+      }
+    });
+    // Falls die App durch eine Notification überhaupt erst aufgewacht ist:
+    // den initial-Response abholen, sobald wir routing-fähig sind.
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (!response) return;
+        const data = response.notification.request.content.data as
+          | Record<string, unknown>
+          | null
+          | undefined;
+        const route = notificationToRoute(data);
+        if (route) router.push(route as never);
+      })
+      .catch(() => {
+        // ignore
+      });
+    return () => sub.remove();
+  }, [session, onboardingSeen, router]);
 
   if (loading || onboardingSeen === null) {
     return (

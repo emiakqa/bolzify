@@ -26,8 +26,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { getUnreadCount, isAppAdmin } from '@/lib/inbox';
 import {
+  type ReminderLeadMin,
   clearAllReminders,
+  getReminderLeadMin,
   getRemindersEnabled,
+  setReminderLeadMin,
   setRemindersEnabled,
   syncReminders,
 } from '@/lib/notifications';
@@ -45,12 +48,14 @@ export default function SettingsScreen() {
   const c = Colors[scheme];
 
   const [remindersOn, setRemindersOn] = useState(true);
+  const [reminderLead, setReminderLead] = useState<ReminderLeadMin>(60);
   const [deleting, setDeleting] = useState(false);
   const [unread, setUnread] = useState(0);
   const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
     getRemindersEnabled().then(setRemindersOn);
+    getReminderLeadMin().then(setReminderLead);
   }, []);
 
   useEffect(() => {
@@ -72,6 +77,16 @@ export default function SettingsScreen() {
       syncReminders(user.id).catch(() => {});
     } else {
       clearAllReminders().catch(() => {});
+    }
+  };
+
+  const cycleReminderLead = async () => {
+    const next: ReminderLeadMin = reminderLead === 60 ? 30 : 60;
+    setReminderLead(next);
+    await setReminderLeadMin(next);
+    // Reschedule mit neuer Lead-Zeit, damit der User den Effekt direkt sieht.
+    if (remindersOn && user) {
+      syncReminders(user.id).catch(() => {});
     }
   };
 
@@ -200,8 +215,18 @@ export default function SettingsScreen() {
             toggle={remindersOn ? 'on' : 'off'}
             onToggle={toggleReminders}
             c={c}
-            last
+            last={!remindersOn}
           />
+          {remindersOn ? (
+            <Row
+              icon="⏰"
+              label="Vorlaufzeit"
+              value={reminderLead === 30 ? '30 Min' : '60 Min'}
+              onPress={cycleReminderLead}
+              c={c}
+              last
+            />
+          ) : null}
         </Group>
 
         <Group label="Account" c={c}>

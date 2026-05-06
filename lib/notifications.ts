@@ -16,10 +16,24 @@ import { Platform } from 'react-native';
 
 import { supabase } from './supabase';
 
-const REMINDER_LEAD_MS = 60 * 60 * 1000; // 1h vor Kickoff
 const STORAGE_KEY = 'bolzify.reminders.v1'; // JSON: { [matchId]: notificationId }
 const ENABLED_KEY = 'bolzify.reminders.enabled.v1'; // '1' (default) oder '0'
-const MAX_SCHEDULE = 50; // iOS-Limit: 64 pending, Android: pragmatisch
+const LEAD_KEY = 'bolzify.reminders.lead.v1'; // '60' (default) oder '30' Minuten
+const SPECIAL_REMINDER_KEY = 'bolzify.special-reminder.id.v1'; // notificationId
+const MAX_SCHEDULE = 48; // iOS-Limit: 64 pending — wir lassen 16 frei für Sondertipp-Reminder + Score-Ankündigungen
+const SPECIAL_REMINDER_LEAD_MS = 24 * 60 * 60 * 1000; // 24h vor erstem Spiel
+const LIVE_TOURNAMENT = 'WM2026';
+
+export type ReminderLeadMin = 30 | 60;
+
+export async function getReminderLeadMin(): Promise<ReminderLeadMin> {
+  const v = await AsyncStorage.getItem(LEAD_KEY);
+  return v === '30' ? 30 : 60;
+}
+
+export async function setReminderLeadMin(lead: ReminderLeadMin): Promise<void> {
+  await AsyncStorage.setItem(LEAD_KEY, String(lead));
+}
 
 // User-Toggle aus dem Settings-Screen. Default an.
 export async function getRemindersEnabled(): Promise<boolean> {
@@ -42,6 +56,27 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+/**
+ * Liefert die Route, zu der eine Notification beim Tap navigieren soll.
+ * Wird vom _layout-Handler aufgerufen.
+ *
+ * Returns null wenn die Notification keine zugehörige Route hat
+ * (z.B. unbekannter `kind`).
+ */
+export function notificationToRoute(
+  data: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!data) return null;
+  const kind = data.kind;
+  if (kind === 'tip-reminder' && (typeof data.matchId === 'number' || typeof data.matchId === 'string')) {
+    return `/tip/${data.matchId}`;
+  }
+  if (kind === 'special-tip-reminder') {
+    return '/special-tips';
+  }
+  return null;
+}
 
 async function loadMap(): Promise<ReminderMap> {
   try {
@@ -101,7 +136,7 @@ type MatchRow = {
 
 // Plant Reminders für alle zukünftigen, untippten Matches neu.
 // Idempotent: cancelt vorherigen State komplett und scheduled frisch — so müssen
-// wir keine Diff-Logik schreiben (max 50 Matches, einmal beim App-Start, billig).
+// wir keine Diff-Logik schreiben (max ~50 Matches, einmal beim App-Start, billig).
 export async function syncReminders(
   userId: string,
 ): Promise<{ scheduled: number; skipped: number; granted: boolean }> {
@@ -115,13 +150,18 @@ export async function syncReminders(
   const granted = await ensureNotificationSetup();
   if (!granted) return { scheduled: 0, skipped: 0, granted: false };
 
-  // Alten State wegwerfen
+  // User-konfigurierte Lead-Zeit (60min default, 30min optional).
+  const leadMin = await getReminderLeadMin();
+  const leadMs = leadMin * 60 * 1000;
+  const leadLabel = leadMin === 30 ? '30 Minuten' : '1 Stunde';
+
+  // Alten Match-State wegwerfen
   const oldMap = await loadMap();
   await Promise.all(Object.values(oldMap).map(cancelById));
   await saveMap({});
 
-  // Nur Matches holen, deren Kickoff > now + 1h (sonst Trigger in Vergangenheit).
-  const horizon = new Date(Date.now() + REMINDER_LEAD_MS + 60_000).toISOString();
+  // Nur Matches holen, deren Kickoff > now + lead (sonst Trigger in Vergangenheit).
+  const horizon = new Date(Date.now() + leadMs + 60_000).toISOString();
   const { data: matches } = await supabase
     .from('matches')
     .select('id, kickoff_at, home_team, away_team')
@@ -129,6 +169,10 @@ export async function syncReminders(
     .eq('status', 'scheduled')
     .order('kickoff_at', { ascending: true })
     .limit(MAX_SCHEDULE);
+
+  // Sondertipp-Reminder unabhängig vom Match-State neu scheduln.
+  // Müssen vor dem Match-Loop laufen, weil sie ein eigenes Slot-Limit haben.
+  await syncSpecialTipReminder(userId);
 
   if (!matches || matches.length === 0) {
     return { scheduled: 0, skipped: 0, granted: true };
@@ -152,7 +196,7 @@ export async function syncReminders(
       skipped++;
       continue;
     }
-    const triggerAt = new Date(m.kickoff_at).getTime() - REMINDER_LEAD_MS;
+    const triggerAt = new Date(m.kickoff_at).getTime() - leadMs;
     if (triggerAt <= Date.now()) {
       skipped++;
       continue;
@@ -161,7 +205,7 @@ export async function syncReminders(
       const id = await Notifications.scheduleNotificationAsync({
         content: {
           title: `⚽ ${m.home_team} vs ${m.away_team}`,
-          body: 'Anpfiff in 1h — du hast noch keinen Tipp.',
+          body: `Anpfiff in ${leadLabel} — du hast noch keinen Tipp.`,
           data: { matchId: m.id, kind: 'tip-reminder' },
           sound: true,
         },
@@ -182,9 +226,76 @@ export async function syncReminders(
   return { scheduled, skipped, granted: true };
 }
 
-// Logout / Account-Wechsel: alles weg.
+// Plant einen einmaligen Reminder 24h vor dem ersten Spiel des Live-Turniers,
+// falls der User noch keinen vollständigen Sondertipp abgegeben hat.
+// Der Reminder ist idempotent: alter wird gecancelt, neuer geplant. Wenn der
+// User schon getippt hat oder die Frist durch ist, wird gar keiner geplant.
+async function syncSpecialTipReminder(userId: string): Promise<void> {
+  // Alten Reminder weg — falls User getippt hat, falls Frist verschoben wurde.
+  const oldId = await AsyncStorage.getItem(SPECIAL_REMINDER_KEY);
+  if (oldId) {
+    await cancelById(oldId);
+    await AsyncStorage.removeItem(SPECIAL_REMINDER_KEY);
+  }
+
+  // Schon einen Sondertipp abgegeben? Dann kein Reminder.
+  const { data: existing } = await supabase
+    .from('special_tips')
+    .select('user_id')
+    .eq('user_id', userId)
+    .eq('tournament', LIVE_TOURNAMENT)
+    .maybeSingle();
+  if (existing) return;
+
+  // Wann startet das Turnier? = frühestes Match.
+  const { data: firstMatch } = await supabase
+    .from('matches')
+    .select('kickoff_at')
+    .eq('tournament', LIVE_TOURNAMENT)
+    .order('kickoff_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!firstMatch?.kickoff_at) return;
+
+  const triggerAt = new Date(firstMatch.kickoff_at).getTime() - SPECIAL_REMINDER_LEAD_MS;
+  if (triggerAt <= Date.now()) return; // zu spät — Frist quasi durch
+
+  try {
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '🌟 WM startet morgen — Sondertipps abgeben',
+        body: 'Weltmeister, Torschützenkönig, Gruppensieger — bis zu 76 Bonuspunkte.',
+        data: { kind: 'special-tip-reminder' },
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(triggerAt),
+        channelId: Platform.OS === 'android' ? 'tip-reminders' : undefined,
+      },
+    });
+    await AsyncStorage.setItem(SPECIAL_REMINDER_KEY, id);
+  } catch {
+    // ignore — kein harter Fail, ist nur ein Reminder
+  }
+}
+
+/**
+ * Wird vom Special-Tips-Screen nach erfolgreicher Abgabe aufgerufen, damit
+ * der bereits geplante Reminder verschwindet und nicht morgens nervt.
+ */
+export async function cancelSpecialTipReminder(): Promise<void> {
+  const id = await AsyncStorage.getItem(SPECIAL_REMINDER_KEY);
+  if (id) {
+    await cancelById(id);
+    await AsyncStorage.removeItem(SPECIAL_REMINDER_KEY);
+  }
+}
+
+// Logout / Account-Wechsel: alles weg — inkl. Sondertipp-Reminder.
 export async function clearAllReminders(): Promise<void> {
   const map = await loadMap();
   await Promise.all(Object.values(map).map(cancelById));
   await saveMap({});
+  await cancelSpecialTipReminder();
 }

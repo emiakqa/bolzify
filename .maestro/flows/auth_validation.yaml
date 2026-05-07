@@ -2,8 +2,9 @@
 # Regression: Sign-Up-Validierung — testet die client-side Guards in login.tsx:
 #   - leere Felder
 #   - zu kurzes Passwort
-#   - ungültiger Username
 #   - AGB nicht akzeptiert (CTA disabled)
+#
+# Username-Validierung wandert auf /set-username (eigener Test, falls nötig).
 #
 # Reines Read-Only — schreibt keinen DB-State.
 # Dauer: ~10s.
@@ -53,15 +54,3 @@ tags:
 - tapOn:
     id: "login-submit-button"
 - assertVisible: "Passwort muss mindestens 8 Zeichen haben."
-
-# 4) Username-Format ungültig
-- tapOn:
-    id: "login-password-input"
-- eraseText: 50
-- inputText: "TestPass123!"
-- tapOn:
-    id: "login-username-input"
-- inputText: "x"  # zu kurz
-- tapOn:
-    id: "login-submit-button"
-- assertVisible: "Username: 3–20 Zeichen, nur Buchstaben, Zahlen, Unterstrich."

@@ -12,6 +12,10 @@ type AuthState = {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  // True sobald wir mindestens einmal versucht haben das Profile zu laden
+  // (egal ob erfolgreich oder mit null-Ergebnis). Wird vom AuthGate genutzt,
+  // um nach Signup/Sign-In zu warten, statt vorzeitig auf Home zu routen.
+  profileLoaded: boolean;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -24,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   const loadProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -37,6 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setProfile(data ?? null);
     }
+    // Egal ob OK, error oder no-row: wir haben's versucht. AuthGate kann
+    // jetzt routen — sonst hängt der User bei kaputtem Profile auf Spinner.
+    setProfileLoaded(true);
   };
 
   useEffect(() => {
@@ -108,6 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // — sonst doppelter Roundtrip bei SIGNED_IN + INITIAL_SESSION.
         if (lastLoadedProfileForUid === uid) return;
         lastLoadedProfileForUid = uid;
+        // Neuer Login → Profile ist (noch) nicht geladen. AuthGate wartet darauf.
+        // Wichtig nach Sign-Out → Sign-In: vorher war profileLoaded=true.
+        setProfileLoaded(false);
         setTimeout(() => {
           if (!mounted) return;
           loadProfile(uid)
@@ -121,6 +132,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         lastLoadedProfileForUid = null;
         setProfile(null);
+        // Kein User → "geladen" ist trivial true, AuthGate kann routen
+        setProfileLoaded(true);
       }
     });
 
@@ -157,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     user: session?.user ?? null,
     profile,
+    profileLoaded,
     signUp: async (email, password) => {
       const { error } = await supabase.auth.signUp({ email, password });
       return { error: error?.message ?? null };

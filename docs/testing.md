@@ -105,7 +105,7 @@ Browser-UI auf <http://localhost:9999> → klick auf Elemente → kopier dir die
 |---|---|---|
 | `auth_signin.yaml` | `smoke`, `auth` | Sign-In mit existierendem Test-Account → Tab-Bar sichtbar |
 | `auth_signup.yaml` | `regression`, `auth` | Sign-Up mit unique Username/Mail → Tab-Bar sichtbar |
-| `auth_validation.yaml` | `regression`, `auth` | Client-side Validation-Guards (leere Felder, Passwort-Länge, Username-Regex, AGB-Disable) |
+| `auth_validation.yaml` | `regression`, `auth` | Client-side Validation-Guards (leere Felder, Passwort-Länge, AGB-Disable) |
 | `tip_submit.yaml` | `regression`, `tip` | ⚠️ Scaffold — braucht testIDs auf Spielplan-Match-Cards + Tip-Stepper |
 
 ## Stable Selectors — Konvention
@@ -118,13 +118,15 @@ Beispiele (in `app/login.tsx`):
 
 | testID | Element |
 |---|---|
-| `login-username-input` | Username-`TextInput` (nur Sign-Up) |
 | `login-email-input` | E-Mail-`TextInput` |
 | `login-password-input` | Passwort-`TextInput` |
-| `login-terms-checkbox` | AGB-`Pressable` |
+| `login-terms-checkbox` | AGB-`Pressable` (nur Sign-Up) |
 | `login-submit-button` | Haupt-CTA-`Button` |
 | `login-switch-mode` | "Jetzt registrieren ›" / "Einloggen ›"-Link |
 | `login-forgot-password` | "Passwort vergessen?"-Link |
+| `set-username-input` | Username-`TextInput` auf `/set-username` |
+| `set-username-submit` | "Weiter"-CTA auf `/set-username` |
+| `set-username-signout` | "Abmelden"-Link auf `/set-username` |
 
 **Bevor du einen neuen Flow schreibst:** prüfe ob die nötigen testIDs schon existieren — sonst füg sie zuerst zum Screen hinzu.
 

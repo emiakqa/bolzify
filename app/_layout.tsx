@@ -7,6 +7,7 @@ import { ActivityIndicator, AppState, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { OfflineBanner } from '@/components/ui/offline-banner';
+import { Colors } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, isPlaceholderUsername, useAuth } from '@/lib/auth';
 import { useAppFonts } from '@/lib/fonts';
@@ -22,9 +23,11 @@ export const unstable_settings = {
 };
 
 function AuthGate() {
-  const { loading, session, profile } = useAuth();
+  const { loading, session, profile, profileLoaded } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const scheme = useColorScheme() ?? 'dark';
+  const themeBg = Colors[scheme].bg;
 
   // null = noch nicht geprüft, true/false = Ergebnis. Muss in den Routing-Check
   // einfließen, damit wir nicht vor dem Check schon nach / schicken.
@@ -59,6 +62,13 @@ function AuthGate() {
 
   useEffect(() => {
     if (loading || onboardingSeen === null) return;
+    // Wenn wir eingeloggt sind, aber Profile noch nicht geladen wurde, warten —
+    // sonst routen wir kurzzeitig auf Home, bevor wir wissen ob der User
+    // einen Platzhalter-Username hat (Flicker zwischen Login → Home → /set-username).
+    // profileLoaded statt !profile, damit wir nicht ewig hängen wenn der
+    // Profile-Load fehlschlägt oder null zurückgibt.
+    if (session && !profileLoaded) return;
+
     const first = segments[0];
     const onLogin = first === 'login';
     const onSetUsername = first === 'set-username';
@@ -133,9 +143,12 @@ function AuthGate() {
     return () => sub.remove();
   }, [session, onboardingSeen, router]);
 
-  if (loading || onboardingSeen === null) {
+  // Spinner halten bis (a) Auth-Loading durch, (b) Onboarding-Flag bekannt,
+  // (c) bei eingeloggtem User auch der Profile-Load-Versuch fertig — verhindert
+  // Home-Flash beim Signup, bevor der Platzhalter-Username erkannt werden kann.
+  if (loading || onboardingSeen === null || (session && !profileLoaded)) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: themeBg }}>
         <ActivityIndicator />
       </View>
     );

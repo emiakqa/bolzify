@@ -23,11 +23,8 @@ import {
 } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
 
 type Mode = 'signin' | 'signup';
-
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 export default function LoginScreen() {
   const { signIn, signUp } = useAuth();
@@ -35,7 +32,6 @@ export default function LoginScreen() {
   const c = Colors[scheme];
 
   const [mode, setMode] = useState<Mode>('signin');
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -68,16 +64,9 @@ export default function LoginScreen() {
       return;
     }
 
-    if (isSignup) {
-      const cleanUsername = username.trim();
-      if (!USERNAME_REGEX.test(cleanUsername.replace(/^@/, ''))) {
-        setError('Username: 3–20 Zeichen, nur Buchstaben, Zahlen, Unterstrich.');
-        return;
-      }
-      if (!acceptTerms) {
-        setError('Bitte AGB und Datenschutz akzeptieren.');
-        return;
-      }
+    if (isSignup && !acceptTerms) {
+      setError('Bitte AGB und Datenschutz akzeptieren.');
+      return;
     }
 
     setBusy(true);
@@ -90,25 +79,9 @@ export default function LoginScreen() {
       return;
     }
 
-    if (isSignup) {
-      // Wenn die Session direkt da ist (kein Email-Confirm), Username sofort
-      // ins Profil schreiben — sonst wird's via set-username.tsx später erfasst.
-      const cleanUsername = username.trim().replace(/^@/, '');
-      const { data: sessionData } = await supabase.auth.getSession();
-      const uid = sessionData.session?.user.id;
-      if (uid) {
-        const { error: upErr } = await supabase
-          .from('profiles')
-          .update({ username: cleanUsername, updated_at: new Date().toISOString() })
-          .eq('id', uid);
-        if (upErr && upErr.code !== '23505') {
-          // 23505 = duplicate username → set-username fängt's auf, hier nicht blocken
-          console.warn('username initial set failed', upErr.message);
-        }
-      } else {
-        setInfo('Konto erstellt. Check dein Postfach und bestätige die E-Mail.');
-      }
-    }
+    // Bei Signup: Username wird auf /set-username gesetzt (AuthGate routet
+    // automatisch hin, weil der Profile-Trigger initial einen Platzhalter
+    // `user_<uuid>` setzt). Hier kein Profile-Update mehr.
     setBusy(false);
   };
 
@@ -166,30 +139,13 @@ export default function LoginScreen() {
                 textAlign: 'center',
               }}>
               {isSignup
-                ? 'Username, Mail, Passwort — und du tippst in deiner ersten Liga mit.'
+                ? 'Mail + Passwort — Username wählst du gleich.'
                 : 'Tipp deine Spiele und sieh, wer in deiner Liga vorne liegt.'}
             </Text>
           </View>
 
           {/* Felder */}
           <View style={{ gap: 14 }}>
-            {isSignup ? (
-              <Field
-                c={c}
-                label="Username"
-                placeholder="@anna_b"
-                icon="@"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!busy}
-                maxLength={21}
-                returnKeyType="next"
-                testID="login-username-input"
-              />
-            ) : null}
-
             <Field
               c={c}
               label="E-Mail"

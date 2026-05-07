@@ -1,14 +1,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Regression: Sign-Up Flow → frisches Konto + Profil-Username + Tab-Bar
+# Regression: Sign-Up Flow → frisches Konto + Username-Set + Tab-Bar
+#
+# Seit dem UX-Refactor läuft Username NICHT mehr im Signup-Form, sondern auf
+# dem dedizierten /set-username-Screen. Maestro klickt also durch zwei Screens:
+#   1. /login (signup mode) — Mail + Passwort + AGB
+#   2. /set-username — Username eintragen
+#   3. Home
 #
 # Generiert pro Run einen unique Username + E-Mail mit Timestamp-Suffix —
 # damit der Flow lokal mehrfach ohne Conflicts laufen kann.
 #
 # Erforderlich: In Supabase muss "Email-Confirmation" AUS sein (Dev-Modus),
-# sonst landet der User nach Submit auf "Check dein Postfach" statt direkt
-# auf der Home — und der Flow schlägt am `assertVisible: Home` fehl.
+# sonst landet der User nach Submit auf "Check dein Postfach" statt auf
+# /set-username — und der Flow schlägt fehl.
 #
-# Dauer: ~15s.
+# Dauer: ~20s.
 # ─────────────────────────────────────────────────────────────────────────────
 appId: de.bolzify.app
 name: "Auth · Sign-Up (new account)"
@@ -36,10 +42,6 @@ tags:
 - evalScript: ${output.suffix = Math.floor(Date.now() / 1000)}
 
 - tapOn:
-    id: "login-username-input"
-- inputText: "mae_${output.suffix}"
-
-- tapOn:
     id: "login-email-input"
 - inputText: "maestro_${output.suffix}@bolzify.test"
 
@@ -54,7 +56,20 @@ tags:
 - tapOn:
     id: "login-submit-button"
 
-# Erfolg = direkt auf Home gelandet
+# Auf /set-username gelandet — Username vergeben
+- extendedWaitUntil:
+    visible:
+      text: "Wähl deinen Username."
+    timeout: 15000
+
+- tapOn:
+    id: "set-username-input"
+- inputText: "mae_${output.suffix}"
+
+- tapOn:
+    id: "set-username-submit"
+
+# Erfolg = jetzt auf Home gelandet
 - extendedWaitUntil:
     visible:
       text: "Home"

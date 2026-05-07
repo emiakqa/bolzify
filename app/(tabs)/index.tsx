@@ -240,7 +240,7 @@ export default function HomeScreen() {
                 fontSize: 14,
                 fontFamily: Fonts.body.medium,
               }}>
-              Servus
+              Moin
             </Text>
             <Text
               style={{

@@ -34,7 +34,7 @@ function SummerHome() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
         <div>
-          <div style={{ color: t.textMuted, fontSize: 14, fontWeight: 500 }}>Servus</div>
+          <div style={{ color: t.textMuted, fontSize: 14, fontWeight: 500 }}>Moin</div>
           <div style={{ color: t.text, fontSize: 36, fontFamily: t.fontDisplay, fontWeight: 800, letterSpacing: -1, lineHeight: 1.1, marginTop: 2 }}>
             @bolzkoenig
           </div>

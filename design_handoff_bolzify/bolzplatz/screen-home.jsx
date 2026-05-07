@@ -15,7 +15,7 @@ function HomeScreen({ scheme = "light" }) {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div style={{ color: t.textMuted, fontSize: 14, fontWeight: 500 }}>Servus</div>
+          <div style={{ color: t.textMuted, fontSize: 14, fontWeight: 500 }}>Moin</div>
           <div style={{
             color: t.text, fontSize: 36, fontFamily: F.display, fontWeight: 800,
             letterSpacing: -1.2, lineHeight: 1.05, marginTop: 2,

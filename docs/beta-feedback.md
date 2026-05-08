@@ -117,7 +117,7 @@ Angewendet in:
 
 ---
 
-### 6. 🟡 Onboarding-Slide „Wage die großen Tipps" zu kompliziert / unklar
+### 6. 🟢 Onboarding-Slide „Wage die großen Tipps" zu kompliziert / unklar *(umgesetzt 2026-05-08)*
 **Problem:** Der Sondertipp-Slide im Onboarding (`app/onboarding.tsx`, Slide 3 von 4) erschlägt den User:
 - Headline „Wage die großen Tipps" — Verb „wagen" ist gestelzt, sagt nicht direkt was Sache ist.
 - Body: „Vor Anpfiff Weltmeister, Torschützenkönig und Gruppensieger setzen — bis zu 76 Bonuspunkte. Sobald der Ball rollt, sind sie fixiert."
@@ -132,6 +132,11 @@ Angewendet in:
 **Datei:** `app/onboarding.tsx` (Slide 3, „specials"-Step).
 
 **Impact:** Klein. Pure Text-Änderung, kein Logik-Touch. Wording vorm Launch nochmal mit 1-2 Probelesern checken.
+
+**Fix:** `app/onboarding.tsx` Slide 3 —
+- Headline: „Wage die großen Tipps" → **„Wer holt den Pokal?"** (direkter, fragender Hook).
+- Body: „Vor Anpfiff Weltmeister, Torschützenkönig und Gruppensieger setzen — bis zu 76 Bonuspunkte. Sobald der Ball rollt, sind sie fixiert." → **„Vor dem Eröffnungsspiel auf Weltmeister, Torschützenkönig und Gruppensieger tippen. Danach gesperrt — bis zu 76 Bonuspunkte."**
+- „fixiert" raus, „gesperrt" rein (eindeutig). Deadline („Eröffnungsspiel") explizit. Bonuspunkte am Ende als Belohnungs-Reframing.
 
 ---
 
@@ -152,7 +157,7 @@ Angewendet in:
 
 ---
 
-### 8. 🟡 Score-Eingabe mit +/- ist umständlich
+### 8. 🟢 Score-Eingabe mit +/- ist umständlich *(umgesetzt 2026-05-08)*
 **Problem:** Auf dem Tipp-Screen wird das Ergebnis (z. B. 0:0) mit `+`- und `-`-Buttons über/unter den großen Ziffern eingestellt. Tester findet das umständlich — bei Tipps wie 3:2 sind das 5 Tap-Aktionen für ein Ergebnis, das man eigentlich „auf einen Schlag" eingeben will.
 
 **Soll-Ideen** (zur Auswahl, nicht alle gleichzeitig):
@@ -166,6 +171,15 @@ Empfehlung: **Tap-on-Number → kleines 0–9-Grid als BottomSheet** (kombinierb
 **Datei:** `app/tip/[matchId].tsx` (Score-Stepper-Komponente).
 
 **Impact:** Mittel. Nicht trivial, aber großer UX-Gewinn — das ist der **meistbenutzte Screen** der App während des Turniers. Wenn das umständlich ist, fühlt sich die ganze App umständlich an.
+
+**Fix:** `app/tip/[matchId].tsx` — drei Eingabewege parallel, jeder optional:
+1. **Tap-on-Number**: Die große Ziffer (88pt) ist jetzt ein Pressable. Tap öffnet eine `NumberSheet`-Modal mit 0–9-Grid (4×3, MAX_GOALS=9). Auswahl setzt den Wert + schließt.
+2. **Quick-Picks**: Horizontale Scroll-Pillen unter der Score-Card mit den 11 häufigsten Resultaten (`0:0 1:0 0:1 1:1 2:1 1:2 2:0 0:2 2:2 3:1 1:3`). Aktive Kombination = grün hinterlegt. One-Tap setzt home + away gleichzeitig.
+3. **Stepper +/−**: Bleibt als Fallback.
+
+Mit dem useEffect aus #3 wird der Torschütze automatisch gecleart, wenn man via Tap-on-Number oder Quick-Pick auf 0:0 wechselt — keine doppelte Validierung nötig.
+
+**Followup ideas (LATER):** Wheel-Picker statt Grid für längeres Wischen, Letztgespielte-Resultate als Quick-Picks (nach 1-2 Spielen lernen wir die Vorlieben des Users).
 
 ---
 

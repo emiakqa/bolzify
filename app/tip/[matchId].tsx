@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -87,6 +88,8 @@ export default function TipScreen() {
     away: null,
   });
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Welche Seite (home/away) soll im Number-Sheet bearbeitet werden? null = zu.
+  const [scoreSheet, setScoreSheet] = useState<'home' | 'away' | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -503,6 +506,7 @@ export default function TipScreen() {
                 value={home}
                 onIncr={() => setHome(Math.min(MAX_GOALS, home + 1))}
                 onDecr={() => setHome(Math.max(0, home - 1))}
+                onPressValue={() => tippable && !saving && setScoreSheet('home')}
                 disabled={!tippable || saving}
                 c={c}
               />
@@ -511,6 +515,7 @@ export default function TipScreen() {
                 value={away}
                 onIncr={() => setAway(Math.min(MAX_GOALS, away + 1))}
                 onDecr={() => setAway(Math.max(0, away - 1))}
+                onPressValue={() => tippable && !saving && setScoreSheet('away')}
                 disabled={!tippable || saving}
                 c={c}
               />
@@ -521,6 +526,60 @@ export default function TipScreen() {
               <TeamLabel name={deName(match.away_team)} logo={logos.away} c={c} />
             </View>
           </Card>
+
+          {/* Quick-Picks: One-Tap-Setzer für die häufigsten Resultate.
+              Beta-Feedback #8 — +/- ist umständlich für 3:2 etc. */}
+          {tippable ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickRow}>
+              {[
+                [0, 0],
+                [1, 0],
+                [0, 1],
+                [1, 1],
+                [2, 1],
+                [1, 2],
+                [2, 0],
+                [0, 2],
+                [2, 2],
+                [3, 1],
+                [1, 3],
+              ].map(([h, a]) => {
+                const active = h === home && a === away;
+                return (
+                  <Pressable
+                    key={`${h}-${a}`}
+                    onPress={() => {
+                      if (saving) return;
+                      setHome(h);
+                      setAway(a);
+                    }}
+                    disabled={saving}
+                    style={({ pressed }) => [
+                      styles.quickPill,
+                      {
+                        backgroundColor: active ? c.accent : c.surface,
+                        borderColor: active ? c.accent : c.border,
+                        opacity: pressed ? 0.7 : 1,
+                        transform: [{ scale: pressed ? 0.96 : 1 }],
+                      },
+                    ]}>
+                    <Text
+                      style={{
+                        color: active ? c.accentFg : c.text,
+                        fontFamily: Fonts.display.bold,
+                        fontSize: 14,
+                        letterSpacing: -0.2,
+                      }}>
+                      {h}:{a}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
 
           {/* Datum / Stadion */}
           <View style={styles.dateRow}>
@@ -769,6 +828,23 @@ export default function TipScreen() {
         groups={squads}
         selectedId={scorer?.id ?? null}
       />
+
+      <NumberSheet
+        visible={scoreSheet === 'home'}
+        current={home}
+        title={match ? `${deName(match.home_team)} · Tore` : 'Tore'}
+        onSelect={(n) => setHome(n)}
+        onClose={() => setScoreSheet(null)}
+        c={c}
+      />
+      <NumberSheet
+        visible={scoreSheet === 'away'}
+        current={away}
+        title={match ? `${deName(match.away_team)} · Tore` : 'Tore'}
+        onSelect={(n) => setAway(n)}
+        onClose={() => setScoreSheet(null)}
+        c={c}
+      />
     </SafeAreaView>
   );
 }
@@ -777,12 +853,14 @@ function Stepper({
   value,
   onIncr,
   onDecr,
+  onPressValue,
   disabled,
   c,
 }: {
   value: number;
   onIncr: () => void;
   onDecr: () => void;
+  onPressValue: () => void;
   disabled: boolean;
   c: (typeof Colors)['light'];
 }) {
@@ -804,16 +882,25 @@ function Stepper({
           +
         </Text>
       </Pressable>
-      <Text
-        style={{
-          color: c.text,
-          fontFamily: Fonts.display.bold,
-          fontSize: 88,
-          letterSpacing: -3,
-          lineHeight: 88,
-        }}>
-        {value}
-      </Text>
+      <Pressable
+        onPress={onPressValue}
+        disabled={disabled}
+        hitSlop={8}
+        style={({ pressed }) => ({
+          opacity: pressed ? 0.7 : 1,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
+        })}>
+        <Text
+          style={{
+            color: c.text,
+            fontFamily: Fonts.display.bold,
+            fontSize: 88,
+            letterSpacing: -3,
+            lineHeight: 88,
+          }}>
+          {value}
+        </Text>
+      </Pressable>
       <Pressable
         onPress={onDecr}
         disabled={disabled || value <= 0}
@@ -831,6 +918,81 @@ function Stepper({
         </Text>
       </Pressable>
     </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NumberSheet — 0-9-Grid für Direkt-Eingabe statt +/- klicken.
+// Beta-Feedback #8: User fanden die +/- Buttons zu umständlich für 3:2 etc.
+// ─────────────────────────────────────────────────────────────────────────────
+function NumberSheet({
+  visible,
+  current,
+  title,
+  onSelect,
+  onClose,
+  c,
+}: {
+  visible: boolean;
+  current: number;
+  title: string;
+  onSelect: (n: number) => void;
+  onClose: () => void;
+  c: (typeof Colors)['light'];
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable onPress={onClose} style={styles.sheetBackdrop}>
+        <Pressable
+          onPress={() => {}}
+          style={[styles.sheetBody, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text
+            style={{
+              color: c.textMuted,
+              fontFamily: Fonts.mono.bold,
+              fontSize: 11,
+              letterSpacing: LetterSpacing.label,
+              textTransform: 'uppercase',
+              textAlign: 'center',
+              marginBottom: Spacing.md,
+            }}>
+            {title}
+          </Text>
+          <View style={styles.numGrid}>
+            {Array.from({ length: MAX_GOALS + 1 }, (_, n) => n).map((n) => {
+              const active = n === current;
+              return (
+                <Pressable
+                  key={n}
+                  onPress={() => {
+                    onSelect(n);
+                    onClose();
+                  }}
+                  style={({ pressed }) => [
+                    styles.numCell,
+                    {
+                      backgroundColor: active ? c.accent : c.surfaceSunken,
+                      borderColor: active ? c.accent : c.border,
+                      opacity: pressed ? 0.7 : 1,
+                      transform: [{ scale: pressed ? 0.96 : 1 }],
+                    },
+                  ]}>
+                  <Text
+                    style={{
+                      color: active ? c.accentFg : c.text,
+                      fontFamily: Fonts.display.bold,
+                      fontSize: 28,
+                      letterSpacing: -0.5,
+                    }}>
+                    {n}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -969,5 +1131,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
+  },
+  // Quick-Picks (Beta-Feedback #8)
+  quickRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  quickPill: {
+    minWidth: 60,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Number-Sheet (Beta-Feedback #8)
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheetBody: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderTopWidth: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+  },
+  numGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  numCell: {
+    width: '22%',
+    aspectRatio: 1,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

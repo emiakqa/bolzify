@@ -40,8 +40,8 @@ const slides = [
   },
   {
     emoji: '🌟',
-    title: 'Wage die großen Tipps',
-    body: 'Vor Anpfiff Weltmeister, Torschützenkönig und Gruppensieger setzen — bis zu 76 Bonuspunkte. Sobald der Ball rollt, sind sie fixiert.',
+    title: 'Wer holt den Pokal?',
+    body: 'Vor dem Eröffnungsspiel auf Weltmeister, Torschützenkönig und Gruppensieger tippen. Danach gesperrt — bis zu 76 Bonuspunkte.',
   },
   {
     emoji: '🏆',

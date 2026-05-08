@@ -13,7 +13,7 @@ Status-Legende:
 
 ## Aus User-Review — 07.05.2026
 
-### 1. 🟠 Tippen ohne Liga-Mitgliedschaft sperren *(Code + Migration durch, Smoke-Test ausstehend)*
+### 1. 🟢 Tippen ohne Liga-Mitgliedschaft sperren *(umgesetzt 2026-05-08, v0.25, Smoke grün)*
 **Problem:** Aktuell kann ein User Tipps abgeben, auch wenn er in keiner Liga Mitglied ist. Das ist sinnlos — Tipps brauchen einen Kontext (Liga), in dem sie zählen. Sonst sammeln sie sich ins Leere.
 
 **Soll:** Tippen ist nur möglich, wenn der User in **mindestens einer Liga** ist. Tipps werden **pro Liga** abgegeben (nicht ein globaler Tipp).
@@ -25,10 +25,10 @@ Status-Legende:
 - App: `lib/active-league.ts` (AsyncStorage), `hooks/use-active-league.ts`, `components/league-picker-bar.tsx`. Tippen-/Home-/My-Tips-/Sondertipp-Screens haben Liga-Picker oben + Empty-State wenn 0 Ligen. Tip-Modal & Sondertipp-Screen haben "Übernehmen"-Button für Tipps aus anderer Liga (One-Tap-Copy).
 - Notifications: Reminder feuert wenn Match in *mindestens einer* Liga des Users noch nicht getippt ist. Sondertipp-Reminder verstummt sobald in irgendeiner Liga getippt.
 
-**Offen:**
+**Erledigt:**
 - ~~Migration in Supabase ausführen (a → b → b2 → c → d)~~ ✅ 2026-05-08 durch.
-- Im Zuge der ersten Smoke-Runde wurden Folge-Bugs entdeckt (#7 Punkte-Anzeige, #9 Spielplan-Refresh, #10 Special-Tips Stale-Closure) → alle drei in v0.25 mitgefixt.
-- 7-Step-UI-Smoke ausstehend: 0-Liga-Empty-State → Liga A erstellen → tippen → Liga B beitreten → Übernehmen → Sondertipps adopt → Per-Liga-Ranking. Wenn grün → 🟢.
+- ~~7-Step-Smoke~~ ✅ 2026-05-08 grün.
+- Folge-Bugs aus erster Smoke-Runde (#7 Punkte-Anzeige, #9 Spielplan-Refresh, #10 Special-Tips Stale-Closure) — alle in v0.25 mitgefixt.
 
 **Impact:** Groß. Architektur-Änderung am Tipp-Modell, alle Tipp-related Screens betroffen.
 
@@ -47,7 +47,7 @@ Status-Legende:
 
 ## Aus Tester-Feedback — 08.05.2026
 
-### 3. 🟡 Torschützen-Tipp bei 0:0 erlauben sperren
+### 3. 🟢 Torschützen-Tipp bei 0:0 sperren *(umgesetzt 2026-05-08)*
 **Problem:** User kann gleichzeitig **0:0** als Ergebnis tippen **und** einen ersten Torschützen wählen. Das ist exploitbar: Der Tester argumentiert, man könne damit sein 0:0 "kostenlos absichern" — wenn doch ein Tor fällt, hat man immerhin die Chance auf den Torschützen-Bonus. Das verzerrt die Anreize.
 
 **Soll:** Wenn `home_score === 0 && away_score === 0` → Torschützen-Picker disabled / hidden, oder beim Submit Validierung mit Fehlermeldung "Bei 0:0 kein Torschütze möglich". Bestehender Torschütze wird beim Wechsel auf 0:0 automatisch entfernt.
@@ -56,9 +56,16 @@ Status-Legende:
 
 **Impact:** Klein. Lokale Validierung im Tipp-Modal, keine Migration nötig (oder optional als CHECK-Constraint).
 
+**Fix:** `app/tip/[matchId].tsx` —
+- `useEffect` auf `[home, away, scorer]`: clearen Torschützen automatisch wenn beide auf 0 stehen.
+- Konstante `isGoalless = home === 0 && away === 0` im Render.
+- Scorer-Pressable bei `isGoalless` disabled, opacity 0.5, Empty-State-Text „Bei 0:0 nicht möglich".
+- `submit()` defensiv: `submitScorer = isGoalless ? null : scorer`.
+DB-Constraint nicht ergänzt (Client-Validierung reicht für Beta; ein CHECK-Constraint wäre defensiv, aber der useEffect ist robust und verhindert Race-Conditions).
+
 ---
 
-### 4. 🟡 Username-Filter (Hate-Speech / NS-Begriffe / Beleidigungen)
+### 4. 🟢 Username-Filter (Hate-Speech / NS-Begriffe / Beleidigungen) *(umgesetzt 2026-05-08)*
 **Problem:** Bei der Username-Wahl ist aktuell **jeder String** erlaubt (außer Duplikate). User können sich z. B. "hitler", "n-wort" oder ähnliches als Anzeigename setzen. Das ist ein **Reputations- und Compliance-Risiko**:
 - App-Store-Reviews könnten die App wegen UGC-Moderation negativ einstufen oder ablehnen.
 - Andere User sehen den Namen in Liga-Tabellen / Hero-Footer / Sondertipp-Karten — Bolzify trägt potenziell Mitverantwortung.
@@ -72,9 +79,19 @@ Status-Legende:
 
 **Impact:** Mittel. Wortliste pflegen ist Folge-Aufwand, aber MVP-Filter ist überschaubar. **Vor Launch zwingend**, sonst Review-Risiko.
 
+**Fix:** Neue `lib/username-filter.ts` mit Blacklist (~40 Begriffe: NS-Vokabular, DE/EN-Slurs, sexuelle Ausbeutung, Terrorismus, harte Beleidigungen). Normalisierung: lowercase, Underscores raus, Leetspeak (0/1/3/4/5/7/8/9 → o/i/e/a/s/t/b/g) — fängt „h1tler", „ad0lf" usw. Doppelter Pass (raw + leet) erlaubt zahlenbasierte Codes wie „1488". Exportiert `checkUsername(raw): string | null` mit vager Fehlermeldung („Dieser Username ist nicht erlaubt — bitte einen anderen wählen.") — bewusst kein Match-Begriff zurückgegeben, sonst hat der Angreifer einen Roadmap zur Umgehung.
+
+Angewendet in:
+- `app/set-username.tsx` (Initial-Setzung nach Sign-Up).
+- `app/profile.tsx` (Change-Username im Profil).
+
+**Offen / LATER:**
+- Server-Backup (Postgres-Trigger auf `profiles.username`) — derzeit nur Client-Validierung. Bypass nur möglich wenn jemand die App debuggt. Niedriges Risiko in Beta-Phase, aber vor öffentlichem Launch nachziehen.
+- Report-Flow auf Profilen (Username melden → Admin-Review).
+
 ---
 
-### 5. 🟡 E-Mail-Validierung fehlt bei Registrierung
+### 5. 🟠 E-Mail-Validierung fehlt bei Registrierung *(Client-Code in v0.26, Supabase-Toggle ausstehend)*
 **Problem:** Aktuell wird bei Sign-Up keine E-Mail-Validierung erzwungen — User kann sich mit ungültigen oder Wegwerf-Adressen registrieren, kein Confirm-Mail-Flow erkennbar. Das macht Account-Recovery unmöglich und öffnet Spam-/Bot-Tür.
 
 **Soll:**
@@ -85,6 +102,18 @@ Status-Legende:
 **Datei:** `app/signup.tsx` (Format-Check), Supabase Dashboard (Confirm-Mail aktivieren), evtl. `app/login.tsx` (Resend-UI).
 
 **Impact:** Mittel. Confirm-Mail-Flow betrifft den gesamten Onboarding-Flow — muss mit Test-Account durchgespielt werden. **Vor Launch zwingend** (Standard-Sicherheitsanforderung, vermeidet Bot-Accounts).
+
+**Fix (Client, v0.26):** `app/login.tsx` —
+- `EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/` — Format-Check vor Submit, klare Fehlermeldung.
+- Sign-Up erkennt Confirm-Mail-Modus (kein Error + keine Session): zeigt Info „Wir haben dir eine Bestätigungs-Mail an X geschickt…", switcht automatisch zurück auf Sign-In-Tab.
+- Sign-In erkennt „Email not confirmed"-Fehler von Supabase: zeigt Hinweis + Resend-Button.
+- `resendConfirmation()` ruft `supabase.auth.resend({ type: 'signup', email })`.
+
+**Ausstehend (User-Action im Supabase-Dashboard):**
+- Confirm-Mail in Supabase Dashboard aktivieren: **Auth → Settings → User Signups → Email Confirmations: ON**.
+- Mail-Template anpassen (deutsch, Brand „Bolzify", korrekter Redirect-URL).
+- SMTP konfigurieren (Supabase-Default schickt 4 Mails/Stunde — für Beta OK, für Launch eigenes SMTP nötig, z. B. Resend, Postmark, oder AWS SES).
+- Erst wenn Toggle on + 1 Sign-Up-Test mit Confirm-Click durchgespielt → Punkt 🟢.
 
 ---
 

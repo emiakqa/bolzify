@@ -23,8 +23,16 @@ import {
 } from '@/constants/design';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 
 type Mode = 'signin' | 'signup';
+
+// Pragmatischer E-Mail-Format-Check: mind. 1 nicht-Whitespace + @ + 1
+// nicht-Whitespace + . + 1 nicht-Whitespace. Fängt Tippfehler („foo@bar"),
+// fehlende Domain, fehlendes @ usw. Vollständige RFC-5322-Validierung wäre
+// Overkill und liefert keine besseren Ergebnisse — der Confirm-Mail-Flow
+// auf Supabase-Seite ist die echte Bestätigung.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const { signIn, signUp } = useAuth();
@@ -38,6 +46,10 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // Wenn Sign-In an „Email not confirmed" scheitert, blenden wir einen
+  // „Bestätigungs-Mail erneut senden"-Button ein.
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const isSignup = mode === 'signup';
 
@@ -45,14 +57,21 @@ export default function LoginScreen() {
     setMode(isSignup ? 'signin' : 'signup');
     setError(null);
     setInfo(null);
+    setNeedsConfirmation(false);
   };
 
   const submit = async () => {
     setError(null);
     setInfo(null);
+    setNeedsConfirmation(false);
 
-    if (!email.trim() || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       setError('E-Mail und Passwort sind Pflicht.');
+      return;
+    }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setError('Bitte gültige E-Mail-Adresse eingeben.');
       return;
     }
     if (password.length < (isSignup ? 8 : 6)) {
@@ -71,18 +90,64 @@ export default function LoginScreen() {
 
     setBusy(true);
     const fn = isSignup ? signUp : signIn;
-    const { error: err } = await fn(email.trim(), password);
+    const { error: err } = await fn(trimmedEmail, password);
 
     if (err) {
       setBusy(false);
-      setError(err);
+      // Supabase liefert für unbestätigte Mails „Email not confirmed". Wenn das
+      // hier landet, hat der User schon einen Account, hat aber noch nicht auf
+      // den Bestätigungslink geklickt. Resend-Button anbieten.
+      const lower = err.toLowerCase();
+      if (lower.includes('email not confirmed') || lower.includes('not confirmed')) {
+        setNeedsConfirmation(true);
+        setError('E-Mail noch nicht bestätigt. Schau im Postfach (auch Spam).');
+      } else {
+        setError(err);
+      }
       return;
     }
 
-    // Bei Signup: Username wird auf /set-username gesetzt (AuthGate routet
-    // automatisch hin, weil der Profile-Trigger initial einen Platzhalter
-    // `user_<uuid>` setzt). Hier kein Profile-Update mehr.
+    // Sign-Up bei aktiviertem Confirm-Mail-Flow auf Supabase: signUp gibt
+    // KEIN error zurück, aber session bleibt null bis User auf den Link
+    // klickt. Wir kommunizieren das hier proaktiv, sonst denkt der User der
+    // Login hängt.
+    if (isSignup) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        setBusy(false);
+        setInfo(
+          `Wir haben dir eine Bestätigungs-Mail an ${trimmedEmail} geschickt. Bitte den Link klicken, dann hier einloggen.`,
+        );
+        setMode('signin');
+        return;
+      }
+    }
+
+    // Bei Signup ohne Confirm-Mail: Username wird auf /set-username gesetzt
+    // (AuthGate routet automatisch hin). Hier kein Profile-Update mehr.
     setBusy(false);
+  };
+
+  const resendConfirmation = async () => {
+    const trimmedEmail = email.trim();
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setError('Bitte gültige E-Mail-Adresse eingeben.');
+      return;
+    }
+    setResending(true);
+    setError(null);
+    setInfo(null);
+    const { error: err } = await supabase.auth.resend({
+      type: 'signup',
+      email: trimmedEmail,
+    });
+    setResending(false);
+    if (err) {
+      setError(err.message);
+    } else {
+      setInfo(`Neue Bestätigungs-Mail an ${trimmedEmail} geschickt.`);
+      setNeedsConfirmation(false);
+    }
   };
 
   const ctaLabel = isSignup ? 'Registrieren' : 'Einloggen';
@@ -228,6 +293,30 @@ export default function LoginScreen() {
               }}>
               {info}
             </Text>
+          ) : null}
+
+          {/* Resend-Button: nur sichtbar wenn Sign-In an unbestätigter Mail
+              gescheitert ist. */}
+          {needsConfirmation ? (
+            <Pressable
+              onPress={resendConfirmation}
+              hitSlop={8}
+              disabled={resending}
+              testID="login-resend-confirmation"
+              style={({ pressed }) => ({
+                opacity: pressed || resending ? 0.6 : 1,
+                marginTop: 8,
+              })}>
+              <Text
+                style={{
+                  color: c.accent,
+                  fontFamily: Fonts.body.bold,
+                  fontSize: 13,
+                  textAlign: 'center',
+                }}>
+                {resending ? 'Sende…' : 'Bestätigungs-Mail erneut senden ›'}
+              </Text>
+            </Pressable>
           ) : null}
 
           {/* CTA */}

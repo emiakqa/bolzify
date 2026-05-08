@@ -28,6 +28,7 @@ import {
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { pickAndUploadAvatar } from '@/lib/avatar';
+import { checkUsername } from '@/lib/username-filter';
 import { supabase } from '@/lib/supabase';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
@@ -65,6 +66,11 @@ export default function ProfileScreen() {
     const trimmed = username.trim();
     if (!USERNAME_RE.test(trimmed)) {
       setError('Username: 3–20 Zeichen, nur Buchstaben / Zahlen / Unterstrich');
+      return;
+    }
+    const filterError = checkUsername(trimmed);
+    if (filterError) {
+      setError(filterError);
       return;
     }
     setSaving(true);

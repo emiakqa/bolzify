@@ -24,6 +24,7 @@ import {
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { checkUsername } from '@/lib/username-filter';
 
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -41,6 +42,11 @@ export default function SetUsernameScreen() {
     const clean = username.trim().replace(/^@/, '');
     if (!USERNAME_REGEX.test(clean)) {
       setError('3–20 Zeichen, nur Buchstaben, Zahlen, Unterstrich.');
+      return;
+    }
+    const filterError = checkUsername(clean);
+    if (filterError) {
+      setError(filterError);
       return;
     }
     if (!user) {

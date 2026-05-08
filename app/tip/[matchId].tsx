@@ -109,6 +109,17 @@ export default function TipScreen() {
     };
   }, [leagueId]);
 
+  // Bei 0:0 ist „Erster Torschütze" sinnlos — Tester-Feedback Punkt #3:
+  // sonst könnte man sein 0:0 mit einem Torschützen „kostenlos absichern".
+  // Wenn der Score nach 0:0 wechselt, Torschützen automatisch entfernen.
+  useEffect(() => {
+    if (home === 0 && away === 0 && scorer) {
+      setScorer(null);
+    }
+  }, [home, away, scorer]);
+
+  const isGoalless = home === 0 && away === 0;
+
   const leagueName = useMemo(
     () => leagues.find((l) => l.id === leagueId)?.name ?? null,
     [leagues, leagueId],
@@ -243,6 +254,9 @@ export default function TipScreen() {
     if (!user || !match || !leagueId) return;
     setError(null);
     setSaving(true);
+    // Defensiv: bei 0:0 nie einen Torschützen schicken — der useEffect oben
+    // sollte das schon erledigt haben, aber doppelte Absicherung schadet nicht.
+    const submitScorer = isGoalless ? null : scorer;
     try {
       const { error: err } = await supabase.from('tips').upsert(
         {
@@ -251,8 +265,8 @@ export default function TipScreen() {
           match_id: match.id,
           home_goals: home,
           away_goals: away,
-          first_scorer: scorer?.name ?? null,
-          first_scorer_id: scorer?.id ?? null,
+          first_scorer: submitScorer?.name ?? null,
+          first_scorer_id: submitScorer?.id ?? null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,match_id,league_id' },
@@ -538,15 +552,15 @@ export default function TipScreen() {
                   Bonus · Erster Torschütze (+3 Pkt)
                 </Text>
                 <Pressable
-                  onPress={() => squadsLoaded && setPickerOpen(true)}
-                  disabled={!squadsLoaded || saving}
+                  onPress={() => !isGoalless && squadsLoaded && setPickerOpen(true)}
+                  disabled={!squadsLoaded || saving || isGoalless}
                   style={({ pressed }) => [
                     styles.pickerField,
                     {
                       backgroundColor: c.surface,
                       borderColor: scorer ? c.accentBorder : c.border,
-                      opacity: pressed ? 0.85 : 1,
-                      transform: [{ scale: pressed ? 0.99 : 1 }],
+                      opacity: isGoalless ? 0.5 : pressed ? 0.85 : 1,
+                      transform: [{ scale: pressed && !isGoalless ? 0.99 : 1 }],
                     },
                   ]}>
                   <View
@@ -596,7 +610,11 @@ export default function TipScreen() {
                           fontFamily: Fonts.body.medium,
                           fontSize: 14,
                         }}>
-                        {squadsLoaded ? 'Spieler auswählen…' : 'Keine Kader in der DB'}
+                        {isGoalless
+                          ? 'Bei 0:0 nicht möglich'
+                          : squadsLoaded
+                            ? 'Spieler auswählen…'
+                            : 'Keine Kader in der DB'}
                       </Text>
                     )}
                   </View>

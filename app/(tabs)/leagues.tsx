@@ -85,31 +85,43 @@ export default function LeaguesScreen() {
       membersByLeague.set(row.league_id, arr);
     }
 
-    // Punkte für alle relevanten User holen + Rankings rechnen
+    // Punkte pro (User, Liga) rechnen. Seit 0016 hat scored_tips/scored_special_tips
+    // ein league_id — wir gruppieren clientseitig, damit Liga A und Liga B
+    // korrekt getrennte Rankings haben.
     const allUserIds = Array.from(new Set((counts ?? []).map((r) => r.user_id)));
-    const pointsMap = new Map<string, number>();
+    const pointsByLeagueAndUser = new Map<string, Map<string, number>>();
     const usernameMap = new Map<string, string>();
     if (allUserIds.length > 0) {
       const [{ data: scored }, { data: scoredSpecial }, { data: profiles }] = await Promise.all([
-        supabase.from('scored_tips').select('user_id, total_points').in('user_id', allUserIds),
+        supabase
+          .from('scored_tips')
+          .select('user_id, league_id, total_points')
+          .in('league_id', ids)
+          .in('user_id', allUserIds),
         supabase
           .from('scored_special_tips')
-          .select('user_id, total_points')
+          .select('user_id, league_id, total_points')
+          .in('league_id', ids)
           .in('user_id', allUserIds),
         supabase.from('profiles').select('id, username').in('id', allUserIds),
       ]);
-      for (const s of scored ?? [])
-        pointsMap.set(s.user_id, (pointsMap.get(s.user_id) ?? 0) + (s.total_points ?? 0));
+      const bump = (lid: string, uid: string, pts: number) => {
+        const inner = pointsByLeagueAndUser.get(lid) ?? new Map<string, number>();
+        inner.set(uid, (inner.get(uid) ?? 0) + pts);
+        pointsByLeagueAndUser.set(lid, inner);
+      };
+      for (const s of scored ?? []) bump(s.league_id, s.user_id, s.total_points ?? 0);
       for (const s of scoredSpecial ?? [])
-        pointsMap.set(s.user_id, (pointsMap.get(s.user_id) ?? 0) + (s.total_points ?? 0));
+        bump(s.league_id, s.user_id, s.total_points ?? 0);
       for (const p of profiles ?? []) usernameMap.set(p.id, p.username);
     }
 
     setLeagues(
       (leagueRows ?? []).map((l) => {
         const memberIds = membersByLeague.get(l.id) ?? [];
+        const leaguePoints = pointsByLeagueAndUser.get(l.id) ?? new Map<string, number>();
         const sorted = memberIds
-          .map((uid) => ({ uid, pts: pointsMap.get(uid) ?? 0 }))
+          .map((uid) => ({ uid, pts: leaguePoints.get(uid) ?? 0 }))
           .sort((a, b) => b.pts - a.pts);
         const myIdx = sorted.findIndex((r) => r.uid === userId);
         const myRank = myIdx >= 0 ? myIdx + 1 : null;

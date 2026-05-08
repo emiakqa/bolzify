@@ -126,9 +126,12 @@ type PlayerInsert = {
   created_at?: string;
 };
 
+// Seit 0016: tips, scored_tips, special_tips, scored_special_tips,
+// group_winner_tips haben alle league_id (per-Liga-Tipps statt global).
 type TipRow = {
   id: string;
   user_id: string;
+  league_id: string;
   match_id: number;
   home_goals: number;
   away_goals: number;
@@ -140,6 +143,7 @@ type TipRow = {
 type TipInsert = {
   id?: string;
   user_id: string;
+  league_id: string;
   match_id: number;
   home_goals: number;
   away_goals: number;
@@ -152,6 +156,7 @@ type TipInsert = {
 type ScoredTipRow = {
   tip_id: string;
   user_id: string;
+  league_id: string;
   match_id: number;
   points: number;
   scorer_bonus: number;
@@ -161,6 +166,7 @@ type ScoredTipRow = {
 type ScoredTipInsert = {
   tip_id: string;
   user_id: string;
+  league_id: string;
   match_id: number;
   points?: number;
   scorer_bonus?: number;
@@ -170,6 +176,7 @@ type ScoredTipInsert = {
 type SpecialTipRow = {
   user_id: string;
   tournament: string;
+  league_id: string;
   champion_team_id: number | null;
   runner_up_team_id: number | null;
   semifinalist_a_team_id: number | null;
@@ -181,6 +188,7 @@ type SpecialTipRow = {
 type SpecialTipInsert = {
   user_id: string;
   tournament?: string;
+  league_id: string;
   champion_team_id?: number | null;
   runner_up_team_id?: number | null;
   semifinalist_a_team_id?: number | null;
@@ -193,6 +201,7 @@ type SpecialTipInsert = {
 type ScoredSpecialTipRow = {
   user_id: string;
   tournament: string;
+  league_id: string;
   champion_points: number;        // 0 oder 10
   runner_up_points: number;       // 0 oder 5
   semifinalist_hits: number;      // 0..4
@@ -206,6 +215,7 @@ type ScoredSpecialTipRow = {
 type ScoredSpecialTipInsert = {
   user_id: string;
   tournament: string;
+  league_id: string;
   champion_points?: number;
   runner_up_points?: number;
   semifinalist_hits?: number;
@@ -219,6 +229,7 @@ type ScoredSpecialTipInsert = {
 type GroupWinnerTipRow = {
   user_id: string;
   tournament: string;
+  league_id: string;
   group_letter: string;  // 'A'..'L'
   team_id: number;
   created_at: string;
@@ -227,6 +238,7 @@ type GroupWinnerTipRow = {
 type GroupWinnerTipInsert = {
   user_id: string;
   tournament?: string;
+  league_id: string;
   group_letter: string;
   team_id: number;
   created_at?: string;

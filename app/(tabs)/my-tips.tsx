@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LeaguePickerBar } from '@/components/league-picker-bar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -22,6 +23,7 @@ import {
   Radius,
   Spacing,
 } from '@/constants/design';
+import { useActiveLeague } from '@/hooks/use-active-league';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
@@ -56,6 +58,8 @@ export default function MyTipsScreen() {
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
 
+  const { leagues, activeLeagueId, setActive } = useActiveLeague();
+
   const [sections, setSections] = useState<Section[]>([]);
   const [specialPoints, setSpecialPoints] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -64,7 +68,7 @@ export default function MyTipsScreen() {
 
   const userId = user?.id ?? null;
   const load = useCallback(async () => {
-    if (!userId) {
+    if (!userId || !activeLeagueId) {
       setSections([]);
       setSpecialPoints(0);
       setLoading(false);
@@ -74,16 +78,19 @@ export default function MyTipsScreen() {
     try {
     const tournament = await getCurrentTournament();
 
+    // Sondertipp-Punkte aus AKTIVER Liga (per-Liga seit 0016).
     const specialPromise = supabase
       .from('scored_special_tips')
       .select('total_points')
       .eq('user_id', userId)
-      .eq('tournament', tournament);
+      .eq('tournament', tournament)
+      .eq('league_id', activeLeagueId);
 
     const { data: tipRows } = await supabase
       .from('tips')
       .select('match_id, home_goals, away_goals, first_scorer_id')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('league_id', activeLeagueId);
 
     const { data: specialRows } = await specialPromise;
     const specialTotal = (specialRows ?? []).reduce(
@@ -114,6 +121,7 @@ export default function MyTipsScreen() {
         .from('scored_tips')
         .select('match_id, total_points')
         .eq('user_id', userId)
+        .eq('league_id', activeLeagueId)
         .in('match_id', matchIds),
       scorerIds.length > 0
         ? supabase.from('players').select('id, name').in('id', scorerIds)
@@ -184,7 +192,7 @@ export default function MyTipsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, activeLeagueId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -221,6 +229,66 @@ export default function MyTipsScreen() {
     );
   }
 
+  // Keine Liga → kein Tipp-Verlauf möglich (Tipps sind per-Liga seit 0016).
+  if (leagues.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
+        <View style={styles.scroll}>
+          <Text
+            style={{
+              color: c.textMuted,
+              fontFamily: Fonts.mono.bold,
+              fontSize: 11,
+              letterSpacing: LetterSpacing.label,
+              textTransform: 'uppercase',
+            }}>
+            Saison · WM 2026
+          </Text>
+          <Text
+            style={{
+              color: c.text,
+              fontSize: 32,
+              lineHeight: 38,
+              fontFamily: Fonts.display.bold,
+              letterSpacing: -1,
+              marginTop: 4,
+              marginBottom: Spacing.lg,
+            }}>
+            Meine Tipps
+          </Text>
+          <Card padding="xl" style={{ alignItems: 'center' }}>
+            <Text
+              style={{
+                color: c.text,
+                fontFamily: Fonts.display.bold,
+                fontSize: 18,
+                letterSpacing: -0.3,
+                textAlign: 'center',
+                marginBottom: Spacing.sm,
+              }}>
+              Noch keine Liga.
+            </Text>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts.body.regular,
+                fontSize: 14,
+                lineHeight: 21,
+                textAlign: 'center',
+                marginBottom: Spacing.lg,
+              }}>
+              Tipps gibt&apos;s pro Liga — leg eine an oder tritt per Code bei.
+            </Text>
+            <Button
+              label="Zu den Ligen"
+              onPress={() => router.push('/(tabs)/leagues')}
+            />
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const matchPoints = sections
     .flatMap((s) => s.data)
     .reduce((sum, r) => sum + (r.points ?? 0), 0);
@@ -236,54 +304,63 @@ export default function MyTipsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
         }
         ListHeaderComponent={
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: c.textMuted,
-                  fontFamily: Fonts.mono.bold,
-                  fontSize: 11,
-                  letterSpacing: LetterSpacing.label,
-                  textTransform: 'uppercase',
-                }}>
-                Saison · WM 2026
-              </Text>
-              <Text
-                style={{
-                  color: c.text,
-                  fontSize: 32,
-                  lineHeight: 38,
-                  fontFamily: Fonts.display.bold,
-                  letterSpacing: -1,
-                  marginTop: 4,
-                }}>
-                Meine Tipps
-              </Text>
-            </View>
-            {totalPoints > 0 ? (
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text
-                  style={{
-                    color: c.accent,
-                    fontFamily: Fonts.display.bold,
-                    fontSize: 36,
-                    letterSpacing: -1,
-                    lineHeight: 38,
-                  }}>
-                  {totalPoints}
-                </Text>
+          <View>
+            <View style={styles.headerRow}>
+              <View style={{ flex: 1 }}>
                 <Text
                   style={{
                     color: c.textMuted,
                     fontFamily: Fonts.mono.bold,
-                    fontSize: 10,
-                    letterSpacing: 0.6,
-                    marginTop: 2,
+                    fontSize: 11,
+                    letterSpacing: LetterSpacing.label,
+                    textTransform: 'uppercase',
                   }}>
-                  PUNKTE
+                  Saison · WM 2026
+                </Text>
+                <Text
+                  style={{
+                    color: c.text,
+                    fontSize: 32,
+                    lineHeight: 38,
+                    fontFamily: Fonts.display.bold,
+                    letterSpacing: -1,
+                    marginTop: 4,
+                  }}>
+                  Meine Tipps
                 </Text>
               </View>
-            ) : null}
+              {totalPoints > 0 ? (
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text
+                    style={{
+                      color: c.accent,
+                      fontFamily: Fonts.display.bold,
+                      fontSize: 36,
+                      letterSpacing: -1,
+                      lineHeight: 38,
+                    }}>
+                    {totalPoints}
+                  </Text>
+                  <Text
+                    style={{
+                      color: c.textMuted,
+                      fontFamily: Fonts.mono.bold,
+                      fontSize: 10,
+                      letterSpacing: 0.6,
+                      marginTop: 2,
+                    }}>
+                    PUNKTE
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={{ marginBottom: Spacing.md }}>
+              <LeaguePickerBar
+                leagues={leagues}
+                activeId={activeLeagueId}
+                onSelect={setActive}
+              />
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -322,11 +399,23 @@ export default function MyTipsScreen() {
         renderItem={({ item }) =>
           item.is_finished ? (
             <FinishedTipCard item={item} c={c} onPress={() =>
-              router.push({ pathname: '/tip/[matchId]', params: { matchId: String(item.matchId) } })
+              router.push({
+                pathname: '/tip/[matchId]',
+                params: {
+                  matchId: String(item.matchId),
+                  ...(activeLeagueId ? { leagueId: activeLeagueId } : {}),
+                },
+              })
             } />
           ) : (
             <OpenTipCard item={item} c={c} onPress={() =>
-              router.push({ pathname: '/tip/[matchId]', params: { matchId: String(item.matchId) } })
+              router.push({
+                pathname: '/tip/[matchId]',
+                params: {
+                  matchId: String(item.matchId),
+                  ...(activeLeagueId ? { leagueId: activeLeagueId } : {}),
+                },
+              })
             } />
           )
         }

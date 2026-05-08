@@ -27,7 +27,9 @@ import {
   Shadow,
   Spacing,
 } from '@/constants/design';
+import { useActiveLeague } from '@/hooks/use-active-league';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getActiveLeagueId } from '@/lib/active-league';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
 import { formatCountdown, formatKickoffDate, formatKickoffTime, isBeforeKickoff } from '@/lib/format';
@@ -51,12 +53,29 @@ type Match = {
 const LIVE_TOURNAMENT = 'WM2026';
 const MAX_GOALS = 9;
 
+type OtherLeagueTip = {
+  league_id: string;
+  league_name: string;
+  home_goals: number;
+  away_goals: number;
+  first_scorer_id: number | null;
+  first_scorer_name: string | null;
+};
+
 export default function TipScreen() {
-  const { matchId } = useLocalSearchParams<{ matchId: string }>();
+  const { matchId, leagueId: leagueIdParam } = useLocalSearchParams<{
+    matchId: string;
+    leagueId?: string;
+  }>();
   const { user } = useAuth();
   const router = useRouter();
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
+  const { leagues } = useActiveLeague();
+
+  // Liga-Kontext: aus Param wenn explizit übergeben (z.B. vom Tippen-Tab via
+  // aktiver Liga), sonst Fallback auf gespeicherte aktive Liga.
+  const [leagueId, setLeagueId] = useState<string | null>(leagueIdParam ?? null);
 
   const [match, setMatch] = useState<Match | null>(null);
   const [home, setHome] = useState(0);
@@ -74,9 +93,29 @@ export default function TipScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [now, setNow] = useState(Date.now());
+  // Tipp aus einer ANDEREN Liga des Users für dasselbe Match — wir bieten
+  // einen "Übernehmen"-Button an, damit man nicht 3× dasselbe eintippen muss.
+  const [otherLeagueTip, setOtherLeagueTip] = useState<OtherLeagueTip | null>(null);
+
+  // Wenn Param fehlt: aktive Liga aus AsyncStorage holen.
+  useEffect(() => {
+    if (leagueId) return;
+    let alive = true;
+    getActiveLeagueId().then((v) => {
+      if (alive) setLeagueId(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [leagueId]);
+
+  const leagueName = useMemo(
+    () => leagues.find((l) => l.id === leagueId)?.name ?? null,
+    [leagues, leagueId],
+  );
 
   const load = useCallback(async () => {
-    if (!matchId || !user) return;
+    if (!matchId || !user || !leagueId) return;
     setLoadError(null);
     setLoading(true);
     const numericId = Number(matchId);
@@ -121,11 +160,13 @@ export default function TipScreen() {
         });
       }
 
+      // Tipp für DIESE Liga laden (wenn vorhanden)
       const { data: tip } = await supabase
         .from('tips')
         .select('home_goals, away_goals, first_scorer, first_scorer_id')
         .eq('user_id', user.id)
         .eq('match_id', numericId)
+        .eq('league_id', leagueId)
         .maybeSingle();
 
       if (tip) {
@@ -139,6 +180,38 @@ export default function TipScreen() {
             .maybeSingle();
           if (p) setScorer(p);
         }
+        // Tipp existiert bereits → keinen "Übernehmen"-Hinweis zeigen.
+        setOtherLeagueTip(null);
+      } else {
+        // Hat der User in einer ANDEREN Liga schon einen Tipp für dieses
+        // Match? Dann zeigen wir einen "Übernehmen"-Button. Limit 1 — wenn
+        // der User in 5 Ligen für dieses Match getippt hat, nehmen wir den
+        // ersten (Sortierung egal — Vorschlag, nicht Konsens).
+        const { data: others } = await supabase
+          .from('tips')
+          .select('league_id, home_goals, away_goals, first_scorer, first_scorer_id')
+          .eq('user_id', user.id)
+          .eq('match_id', numericId)
+          .neq('league_id', leagueId)
+          .limit(1);
+        const o = others?.[0];
+        if (o) {
+          const { data: lg } = await supabase
+            .from('leagues')
+            .select('name')
+            .eq('id', o.league_id)
+            .maybeSingle();
+          setOtherLeagueTip({
+            league_id: o.league_id,
+            league_name: lg?.name ?? '—',
+            home_goals: o.home_goals,
+            away_goals: o.away_goals,
+            first_scorer_id: o.first_scorer_id,
+            first_scorer_name: o.first_scorer,
+          });
+        } else {
+          setOtherLeagueTip(null);
+        }
       }
     } catch (err) {
       console.error('[tip] load failed', err);
@@ -146,7 +219,7 @@ export default function TipScreen() {
     } finally {
       setLoading(false);
     }
-  }, [matchId, user]);
+  }, [matchId, user, leagueId]);
 
   useEffect(() => {
     load();
@@ -167,13 +240,14 @@ export default function TipScreen() {
   );
 
   const submit = async () => {
-    if (!user || !match) return;
+    if (!user || !match || !leagueId) return;
     setError(null);
     setSaving(true);
     try {
       const { error: err } = await supabase.from('tips').upsert(
         {
           user_id: user.id,
+          league_id: leagueId,
           match_id: match.id,
           home_goals: home,
           away_goals: away,
@@ -181,21 +255,21 @@ export default function TipScreen() {
           first_scorer_id: scorer?.id ?? null,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'user_id,match_id' },
+        { onConflict: 'user_id,match_id,league_id' },
       );
       if (err) {
-        // Wenn der RLS-Check serverseitig zuschlägt (kickoff_at <= now()),
-        // zeigt Supabase "violates row-level security policy". Das passiert
-        // bei der 1-Sekunde-vor-Anpfiff-Race: Client hatte das Match noch
-        // als tippbar, der Server schon nicht mehr. Echte Botschaft statt
-        // RLS-Jargon zeigen.
+        // Wenn der RLS-Check serverseitig zuschlägt (kickoff_at <= now()
+        // ODER User nicht (mehr) in der Liga), zeigt Supabase "violates
+        // row-level security policy". Echte Botschaft statt RLS-Jargon.
         const lower = (err.message ?? '').toLowerCase();
-        const looksLikeKickoffLock =
+        const looksLikeRlsBlock =
           lower.includes('row-level security') ||
           lower.includes('row level security') ||
           (lower.includes('policy') && lower.includes('tips'));
-        if (looksLikeKickoffLock) {
-          setError('Anpfiff ist schon durch — Tipps für dieses Match sind gesperrt.');
+        if (looksLikeRlsBlock) {
+          setError(
+            'Anpfiff ist schon durch oder du bist nicht (mehr) in der Liga — Tipp gesperrt.',
+          );
         } else {
           setError(err.message);
         }
@@ -211,6 +285,75 @@ export default function TipScreen() {
       setSaving(false);
     }
   };
+
+  // "Übernehmen"-Button: kopiert den Tipp aus einer anderen Liga in die
+  // lokalen Stepper-States. User muss noch auf "Speichern" tippen — sonst
+  // hätte er kein Veto-Recht falls er versehentlich gedrückt hat.
+  const adoptOtherTip = async () => {
+    if (!otherLeagueTip) return;
+    setHome(otherLeagueTip.home_goals);
+    setAway(otherLeagueTip.away_goals);
+    if (otherLeagueTip.first_scorer_id) {
+      const { data: p } = await supabase
+        .from('players')
+        .select('id, name, number, position')
+        .eq('id', otherLeagueTip.first_scorer_id)
+        .maybeSingle();
+      setScorer(p ?? null);
+    } else {
+      setScorer(null);
+    }
+    setOtherLeagueTip(null);
+  };
+
+  // Edge-Case: User hat keine Liga (Deep-Link aus Notification, aber Liga
+  // verlassen). Hier kein Tipp möglich — zurück zum Tippen-Tab, der zeigt
+  // den passenden Empty-State.
+  if (!leagueId && leagues.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.topBar}>
+          <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+              ‹ Zurück
+            </Text>
+          </Pressable>
+          <View style={{ width: 50 }} />
+        </View>
+        <View style={[styles.loadingWrap, { padding: Spacing.lg }]}>
+          <Text
+            style={{
+              color: c.text,
+              fontFamily: Fonts.display.bold,
+              fontSize: 18,
+              textAlign: 'center',
+              marginBottom: Spacing.sm,
+            }}>
+            Erst Liga, dann tippen.
+          </Text>
+          <Text
+            style={{
+              color: c.textMuted,
+              fontFamily: Fonts.body.regular,
+              fontSize: 14,
+              lineHeight: 21,
+              textAlign: 'center',
+            }}>
+            Tipps brauchen eine Liga, sonst zählen sie nirgendwo.
+          </Text>
+          <Button
+            label="Liga beitreten"
+            onPress={() => {
+              router.back();
+              router.push('/leagues-join');
+            }}
+            style={{ marginTop: Spacing.lg }}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loadError && !match) {
     return (
@@ -276,6 +419,37 @@ export default function TipScreen() {
             {match.stage ? <Badge label={match.stage.toUpperCase()} tone="neutral" /> : <View />}
             <View style={{ width: 50 }} />
           </View>
+
+          {/* Liga-Kontext-Pill: zeigt für welche Liga dieser Tipp zählt. */}
+          {leagueName ? (
+            <View
+              style={[
+                styles.leagueContextPill,
+                { backgroundColor: c.surface, borderColor: c.border },
+              ]}>
+              <Text
+                style={{
+                  color: c.textMuted,
+                  fontFamily: Fonts.mono.bold,
+                  fontSize: 10,
+                  letterSpacing: LetterSpacing.label,
+                  textTransform: 'uppercase',
+                }}>
+                Tipp für
+              </Text>
+              <Text
+                style={{
+                  color: c.text,
+                  fontFamily: Fonts.display.bold,
+                  fontSize: 14,
+                  letterSpacing: -0.2,
+                  flex: 1,
+                }}
+                numberOfLines={1}>
+                {leagueName}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Kickoff-Bar */}
           {tippable ? (
@@ -442,6 +616,46 @@ export default function TipScreen() {
                 ) : null}
               </View>
 
+              {/* Übernehmen-Hinweis: gleicher User hat in einer anderen Liga
+                  schon getippt. One-Tap kopiert die Werte rüber. */}
+              {otherLeagueTip ? (
+                <Card variant="flat" padding="md">
+                  <View style={styles.adoptRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: c.textMuted,
+                          fontFamily: Fonts.mono.bold,
+                          fontSize: 10,
+                          letterSpacing: LetterSpacing.label,
+                          textTransform: 'uppercase',
+                          marginBottom: 4,
+                        }}>
+                        In „{otherLeagueTip.league_name}" getippt
+                      </Text>
+                      <Text
+                        style={{
+                          color: c.text,
+                          fontFamily: Fonts.display.bold,
+                          fontSize: 18,
+                          letterSpacing: -0.3,
+                        }}>
+                        {otherLeagueTip.home_goals}:{otherLeagueTip.away_goals}
+                        {otherLeagueTip.first_scorer_name
+                          ? ` · ⚽ ${otherLeagueTip.first_scorer_name}`
+                          : ''}
+                      </Text>
+                    </View>
+                    <Button
+                      label="Übernehmen"
+                      size="sm"
+                      variant="secondary"
+                      onPress={adoptOtherTip}
+                    />
+                  </View>
+                </Card>
+              ) : null}
+
               {/* Punkte-Erklärung */}
               <Card variant="flat" padding="md">
                 <Text
@@ -457,9 +671,9 @@ export default function TipScreen() {
                 </Text>
                 <View style={{ gap: 6 }}>
                   {[
-                    { l: 'Exakter Tipp', p: '+8' },
-                    { l: 'Tordifferenz', p: '+5' },
-                    { l: 'Tendenz (richtiger Sieger)', p: '+3' },
+                    { l: 'Exakter Tipp', p: '+6' },
+                    { l: 'Tordifferenz', p: '+4' },
+                    { l: 'Tendenz (richtiger Sieger)', p: '+2' },
                     { l: 'Erster Torschütze', p: '+3' },
                   ].map((r) => (
                     <View key={r.l} style={styles.ruleRow}>
@@ -723,5 +937,19 @@ const styles = StyleSheet.create({
   error: {
     fontSize: FontSize.sm,
     textAlign: 'center',
+  },
+  leagueContextPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
+  adoptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
 });

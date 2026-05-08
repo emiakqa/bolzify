@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LeaguePickerBar } from '@/components/league-picker-bar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ErrorCard } from '@/components/ui/error-card';
 import { TeamFlag } from '@/components/ui/team-flag';
@@ -22,6 +24,7 @@ import {
   LineHeight,
   Spacing,
 } from '@/constants/design';
+import { useActiveLeague } from '@/hooks/use-active-league';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
@@ -76,6 +79,13 @@ export default function MatchesScreen() {
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
 
+  const {
+    leagues,
+    activeLeagueId,
+    setActive,
+    loading: leaguesLoading,
+  } = useActiveLeague();
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [tips, setTips] = useState<Map<number, Tip>>(new Map());
   const [logos, setLogos] = useState<Map<number, string>>(new Map());
@@ -115,7 +125,9 @@ export default function MatchesScreen() {
       setLogos(map);
     }
 
-    if (userId) {
+    // Tipps + Scores nur für die aktive Liga laden — sonst zeigen wir
+    // gemischte Tipps aus allen Ligen, das wäre verwirrend.
+    if (userId && activeLeagueId) {
       const matchIds = (data ?? []).map((m) => m.id);
       const [{ data: tipData }, { data: scoredData }] = await Promise.all([
         matchIds.length > 0
@@ -123,6 +135,7 @@ export default function MatchesScreen() {
               .from('tips')
               .select('match_id, home_goals, away_goals')
               .eq('user_id', userId)
+              .eq('league_id', activeLeagueId)
               .in('match_id', matchIds)
           : Promise.resolve({ data: [] as { match_id: number; home_goals: number; away_goals: number }[] }),
         matchIds.length > 0
@@ -130,6 +143,7 @@ export default function MatchesScreen() {
               .from('scored_tips')
               .select('match_id, total_points')
               .eq('user_id', userId)
+              .eq('league_id', activeLeagueId)
               .in('match_id', matchIds)
           : Promise.resolve({ data: [] as { match_id: number; total_points: number | null }[] }),
       ]);
@@ -141,6 +155,9 @@ export default function MatchesScreen() {
         map.set(t.match_id, { ...t, points: pointsByMatch.get(t.match_id) ?? null });
       }
       setTips(map);
+    } else {
+      // Keine aktive Liga → keine Tipps zeigen.
+      setTips(new Map());
     }
     } catch (err) {
       console.error('[matches] load failed', err);
@@ -148,11 +165,13 @@ export default function MatchesScreen() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, activeLeagueId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const sections = useMemo<Section[]>(() => {
     const groups = new Map<string, { order: number; data: Match[] }>();
@@ -190,11 +209,84 @@ export default function MatchesScreen() {
     );
   }
 
-  if (loading) {
+  if (loading || leaguesLoading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={c.textMuted} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Hard Gate: keine Liga → keine Spielplan-Liste, sondern Liga-CTA.
+  // Sonst tippt der User ins Leere — Tipps brauchen einen Liga-Kontext.
+  if (leagues.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]} edges={['top']}>
+        <View style={styles.scroll}>
+          <Text
+            style={{
+              color: c.textMuted,
+              fontFamily: Fonts.mono.bold,
+              fontSize: 11,
+              letterSpacing: LetterSpacing.label,
+              textTransform: 'uppercase',
+            }}>
+            WM 2026
+          </Text>
+          <Text
+            style={{
+              color: c.text,
+              fontSize: FontSize.xxl + 4,
+              lineHeight: LineHeight.xxl,
+              fontFamily: Fonts.display.bold,
+              letterSpacing: -1,
+              marginTop: 4,
+              marginBottom: Spacing.lg,
+            }}>
+            Spielplan
+          </Text>
+          <Card padding="xl" style={styles.emptyCard}>
+            <Text
+              style={{
+                color: c.text,
+                fontFamily: Fonts.display.bold,
+                fontSize: 18,
+                letterSpacing: -0.3,
+                textAlign: 'center',
+                marginBottom: Spacing.sm,
+              }}>
+              Erst Liga, dann tippen.
+            </Text>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts.body.regular,
+                fontSize: 14,
+                lineHeight: 21,
+                textAlign: 'center',
+                marginBottom: Spacing.lg,
+              }}>
+              Tipps brauchen eine Liga, sonst zählen sie nirgendwo. Tritt einer
+              bei oder leg eine eigene an.
+            </Text>
+            <View style={styles.emptyCtaRow}>
+              <Button
+                label="Liga erstellen"
+                size="md"
+                onPress={() => router.push('/leagues-new')}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Beitreten"
+                variant="secondary"
+                size="md"
+                onPress={() => router.push('/leagues-join')}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
         </View>
       </SafeAreaView>
     );
@@ -210,33 +302,42 @@ export default function MatchesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.textMuted} />
         }
         ListHeaderComponent={
-          <View style={styles.headerRow}>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: c.textMuted,
-                  fontFamily: Fonts.mono.bold,
-                  fontSize: 11,
-                  letterSpacing: LetterSpacing.label,
-                  textTransform: 'uppercase',
-                }}>
-                WM 2026 · {matches.length} Spiele
-              </Text>
-              <Text
-                style={{
-                  color: c.text,
-                  fontSize: FontSize.xxl + 4,
-                  lineHeight: LineHeight.xxl,
-                  fontFamily: Fonts.display.bold,
-                  letterSpacing: -1,
-                  marginTop: 4,
-                }}>
-                Spielplan
-              </Text>
+          <View>
+            <View style={styles.headerRow}>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: c.textMuted,
+                    fontFamily: Fonts.mono.bold,
+                    fontSize: 11,
+                    letterSpacing: LetterSpacing.label,
+                    textTransform: 'uppercase',
+                  }}>
+                  WM 2026 · {matches.length} Spiele
+                </Text>
+                <Text
+                  style={{
+                    color: c.text,
+                    fontSize: FontSize.xxl + 4,
+                    lineHeight: LineHeight.xxl,
+                    fontFamily: Fonts.display.bold,
+                    letterSpacing: -1,
+                    marginTop: 4,
+                  }}>
+                  Spielplan
+                </Text>
+              </View>
+              {openCount > 0 ? (
+                <Badge label={`${openCount} OFFEN`} tone="warm" />
+              ) : null}
             </View>
-            {openCount > 0 ? (
-              <Badge label={`${openCount} OFFEN`} tone="warm" />
-            ) : null}
+            <View style={{ marginBottom: Spacing.md }}>
+              <LeaguePickerBar
+                leagues={leagues}
+                activeId={activeLeagueId}
+                onSelect={setActive}
+              />
+            </View>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -265,7 +366,13 @@ export default function MatchesScreen() {
               padding="md"
               style={styles.cardSpacing}
               onPress={() =>
-                router.push({ pathname: '/tip/[matchId]', params: { matchId: String(item.id) } })
+                router.push({
+                  pathname: '/tip/[matchId]',
+                  params: {
+                    matchId: String(item.id),
+                    ...(activeLeagueId ? { leagueId: activeLeagueId } : {}),
+                  },
+                })
               }>
               <View style={styles.row}>
                 <View style={styles.rowLeft}>
@@ -425,5 +532,13 @@ const styles = StyleSheet.create({
   tipStack: {
     alignItems: 'flex-end',
     gap: 4,
+  },
+  emptyCard: {
+    alignItems: 'center',
+  },
+  emptyCtaRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    width: '100%',
   },
 });

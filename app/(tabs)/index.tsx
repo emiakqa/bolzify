@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LeaguePickerBar } from '@/components/league-picker-bar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -27,6 +28,7 @@ import {
   Radius,
   Spacing,
 } from '@/constants/design';
+import { useActiveLeague } from '@/hooks/use-active-league';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
@@ -55,12 +57,6 @@ type Tip = {
   away_goals: number;
 };
 
-type LeaguePreview = {
-  id: string;
-  name: string;
-  member_count: number;
-};
-
 type SpecialTipsStatus = {
   filled: number;
   total: number;
@@ -72,10 +68,14 @@ export default function HomeScreen() {
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
 
+  // Aktive Liga steuert: Hero-Tipp, Sondertipp-Status. Ligen-Liste wird auch
+  // unten als "Deine Ligen" gerendert — wir teilen sie statt zwei Mal zu
+  // laden.
+  const { leagues: myLeagues, activeLeagueId, setActive } = useActiveLeague();
+
   const [nextMatch, setNextMatch] = useState<Match | null>(null);
   const [nextMatchTip, setNextMatchTip] = useState<Tip | null>(null);
   const [logos, setLogos] = useState<TeamLogos>({ home: null, away: null });
-  const [myLeagues, setMyLeagues] = useState<LeaguePreview[]>([]);
   const [specialStatus, setSpecialStatus] = useState<SpecialTipsStatus>({ filled: 0, total: 5 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -118,11 +118,13 @@ export default function HomeScreen() {
     }
     setNextMatch(finalMatch);
 
-    if (finalMatch && userId) {
+    // Hero-Tipp aus aktiver Liga (per-Liga-Tipps seit 0016).
+    if (finalMatch && userId && activeLeagueId) {
       const { data: tip } = await supabase
         .from('tips')
         .select('match_id, home_goals, away_goals')
         .eq('user_id', userId)
+        .eq('league_id', activeLeagueId)
         .eq('match_id', finalMatch.id)
         .maybeSingle();
       setNextMatchTip(tip ?? null);
@@ -145,7 +147,8 @@ export default function HomeScreen() {
       setLogos({ home: null, away: null });
     }
 
-    if (userId) {
+    // Sondertipp-Status aus aktiver Liga (per-Liga seit 0016).
+    if (userId && activeLeagueId) {
       const { data: special } = await supabase
         .from('special_tips')
         .select(
@@ -153,6 +156,7 @@ export default function HomeScreen() {
         )
         .eq('user_id', userId)
         .eq('tournament', tournament)
+        .eq('league_id', activeLeagueId)
         .maybeSingle();
       if (special) {
         const filled = [
@@ -166,42 +170,18 @@ export default function HomeScreen() {
       } else {
         setSpecialStatus({ filled: 0, total: 5 });
       }
+    } else {
+      setSpecialStatus({ filled: 0, total: 5 });
     }
 
-    if (userId) {
-      const { data: memberRows } = await supabase
-        .from('league_members')
-        .select('league_id')
-        .eq('user_id', userId);
-      const ids = (memberRows ?? []).map((r) => r.league_id);
-      if (ids.length > 0) {
-        const { data: lgs } = await supabase
-          .from('leagues')
-          .select('id, name')
-          .in('id', ids)
-          .order('created_at', { ascending: false })
-          .limit(3);
-        const { data: counts } = await supabase
-          .from('league_members')
-          .select('league_id')
-          .in('league_id', ids);
-        const countMap = new Map<string, number>();
-        for (const row of counts ?? [])
-          countMap.set(row.league_id, (countMap.get(row.league_id) ?? 0) + 1);
-        setMyLeagues(
-          (lgs ?? []).map((l) => ({ ...l, member_count: countMap.get(l.id) ?? 1 })),
-        );
-      } else {
-        setMyLeagues([]);
-      }
-    }
+    // myLeagues kommt aus useActiveLeague — kein separater Query mehr nötig.
     } catch (err) {
       console.error('[home] load failed', err);
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, activeLeagueId]);
 
   useEffect(() => {
     load();
@@ -279,6 +259,18 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
+        {/* Liga-Picker (nur wenn ≥1 Liga) — die Hero-Tipps & Sondertipps
+            unten beziehen sich auf die hier ausgewählte Liga. */}
+        {myLeagues.length > 0 ? (
+          <View style={{ marginBottom: Spacing.sm }}>
+            <LeaguePickerBar
+              leagues={myLeagues}
+              activeId={activeLeagueId}
+              onSelect={setActive}
+            />
+          </View>
+        ) : null}
+
         {/* Live-Ticker (Mono Pulse) */}
         {nextMatch && nextMatch.status !== 'finished' ? (
           <View style={[styles.tickerBar, { backgroundColor: c.surface }]}>
@@ -330,52 +322,64 @@ export default function HomeScreen() {
               logos={logos}
               now={now}
               c={c}
-              onPress={() =>
+              noLeagues={myLeagues.length === 0}
+              onPress={() => {
+                // Ohne Liga kein Tipp möglich — direkt zur Liga-Erstellung
+                // schicken statt ins Tipp-Modal das eh nur Empty-State zeigt.
+                if (myLeagues.length === 0) {
+                  router.push('/leagues-new');
+                  return;
+                }
                 router.push({
                   pathname: '/tip/[matchId]',
-                  params: { matchId: String(nextMatch.id) },
-                })
-              }
+                  params: {
+                    matchId: String(nextMatch.id),
+                    ...(activeLeagueId ? { leagueId: activeLeagueId } : {}),
+                  },
+                });
+              }}
             />
           </View>
         )}
 
-        {/* Sondertipps (warm) */}
-        <Card
-          variant="warm"
-          padding="md"
-          onPress={() => router.push('/special-tips')}
-          style={{ marginTop: Spacing.md }}>
-          <View style={styles.specialInner}>
-            <View style={[styles.specialIcon, { backgroundColor: c.warm }]}>
-              <Text style={{ color: c.warmFg, fontFamily: Fonts.display.bold, fontSize: 20 }}>
-                ★
-              </Text>
+        {/* Sondertipps (warm) — nur sinnvoll mit Liga, sonst weglassen. */}
+        {myLeagues.length > 0 ? (
+          <Card
+            variant="warm"
+            padding="md"
+            onPress={() => router.push('/special-tips')}
+            style={{ marginTop: Spacing.md }}>
+            <View style={styles.specialInner}>
+              <View style={[styles.specialIcon, { backgroundColor: c.warm }]}>
+                <Text style={{ color: c.warmFg, fontFamily: Fonts.display.bold, fontSize: 20 }}>
+                  ★
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: c.text,
+                    fontFamily: Fonts.display.bold,
+                    fontSize: 15,
+                    letterSpacing: -0.3,
+                  }}>
+                  Sondertipps
+                </Text>
+                <Text
+                  style={{
+                    color: c.textMuted,
+                    fontFamily: Fonts.mono.regular,
+                    fontSize: 12,
+                    letterSpacing: 0.4,
+                    marginTop: 2,
+                  }}>
+                  {specialStatus.filled}/{specialStatus.total} ABGEGEBEN · VOR ANPFIFF
+                </Text>
+              </View>
+              <Text style={{ color: c.warm, fontSize: 22 }}>›</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  color: c.text,
-                  fontFamily: Fonts.display.bold,
-                  fontSize: 15,
-                  letterSpacing: -0.3,
-                }}>
-                Sondertipps
-              </Text>
-              <Text
-                style={{
-                  color: c.textMuted,
-                  fontFamily: Fonts.mono.regular,
-                  fontSize: 12,
-                  letterSpacing: 0.4,
-                  marginTop: 2,
-                }}>
-                {specialStatus.filled}/{specialStatus.total} ABGEGEBEN · VOR ANPFIFF
-              </Text>
-            </View>
-            <Text style={{ color: c.warm, fontSize: 22 }}>›</Text>
-          </View>
-        </Card>
+          </Card>
+        ) : null}
 
         {/* Ligen */}
         <SectionHeader
@@ -473,6 +477,7 @@ function MatchHero({
   logos,
   now,
   c,
+  noLeagues,
   onPress,
 }: {
   match: Match;
@@ -480,6 +485,7 @@ function MatchHero({
   logos: TeamLogos;
   now: number;
   c: (typeof Colors)['light'];
+  noLeagues: boolean;
   onPress: () => void;
 }) {
   const countdown = formatCountdown(match.kickoff_at, now);
@@ -489,6 +495,17 @@ function MatchHero({
   // Hero-Score: realer Score wenn finished, Tipp wenn schon getippt, sonst —
   const heroH = isFinished ? match.home_goals : tip?.home_goals;
   const heroA = isFinished ? match.away_goals : tip?.away_goals;
+
+  // CTA-Label kontextuell:
+  // - Schon getippt → "GESPEICHERT ✓"
+  // - Keine Liga    → "ERST LIGA, DANN TIPPEN ›"
+  // - sonst         → "JETZT TIPPEN ›"
+  const ctaLabel = tip
+    ? 'DEIN TIPP · GESPEICHERT ✓'
+    : noLeagues
+      ? 'ERST LIGA, DANN TIPPEN ›'
+      : 'JETZT TIPPEN ›';
+  const ctaColor = tip ? c.accent : c.warm;
 
   return (
     <Card variant="elevated" onPress={onPress} padding="md">
@@ -531,13 +548,13 @@ function MatchHero({
         </Text>
         <Text
           style={{
-            color: tip ? c.accent : c.warm,
+            color: ctaColor,
             fontFamily: Fonts.mono.bold,
             fontSize: 11,
             letterSpacing: 0.4,
             textTransform: 'uppercase',
           }}>
-          {tip ? 'DEIN TIPP · GESPEICHERT ✓' : 'JETZT TIPPEN ›'}
+          {ctaLabel}
         </Text>
       </View>
     </Card>

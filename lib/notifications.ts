@@ -178,14 +178,37 @@ export async function syncReminders(
     return { scheduled: 0, skipped: 0, granted: true };
   }
 
-  // Welche davon sind schon getippt?
+  // Liga-Mitgliedschaften des Users — Tipps sind seit 0016 pro Liga.
+  // Ein Match gilt als "fully tipped" nur wenn der User in JEDER seiner
+  // Ligen schon getippt hat. Sonst feuert der Reminder, damit er die
+  // verbliebenen Ligen noch befüllen kann.
+  const { data: memberRows } = await supabase
+    .from('league_members')
+    .select('league_id')
+    .eq('user_id', userId);
+  const userLeagueCount = (memberRows ?? []).length;
+  if (userLeagueCount === 0) {
+    // Keine Liga = keine sinnvollen Tipps = keine Reminder.
+    return { scheduled: 0, skipped: 0, granted: true };
+  }
+
   const ids = matches.map((m) => m.id);
   const { data: tips } = await supabase
     .from('tips')
-    .select('match_id')
+    .select('match_id, league_id')
     .eq('user_id', userId)
     .in('match_id', ids);
-  const tipped = new Set((tips ?? []).map((t) => t.match_id));
+
+  const leaguesPerMatch = new Map<number, Set<string>>();
+  for (const t of tips ?? []) {
+    const set = leaguesPerMatch.get(t.match_id) ?? new Set<string>();
+    set.add(t.league_id);
+    leaguesPerMatch.set(t.match_id, set);
+  }
+  const tipped = new Set<number>();
+  for (const [matchId, leagueSet] of leaguesPerMatch) {
+    if (leagueSet.size >= userLeagueCount) tipped.add(matchId);
+  }
 
   const newMap: ReminderMap = {};
   let scheduled = 0;
@@ -238,14 +261,16 @@ async function syncSpecialTipReminder(userId: string): Promise<void> {
     await AsyncStorage.removeItem(SPECIAL_REMINDER_KEY);
   }
 
-  // Schon einen Sondertipp abgegeben? Dann kein Reminder.
+  // Schon in irgendeiner Liga einen Sondertipp abgegeben? Dann kein Reminder
+  // mehr — User kennt das Feature und kann via „Übernehmen" auf andere Ligen
+  // ausweiten. Limit(1) statt maybeSingle weil per-Liga jetzt n Rows möglich.
   const { data: existing } = await supabase
     .from('special_tips')
     .select('user_id')
     .eq('user_id', userId)
     .eq('tournament', LIVE_TOURNAMENT)
-    .maybeSingle();
-  if (existing) return;
+    .limit(1);
+  if (existing && existing.length > 0) return;
 
   // Wann startet das Turnier? = frühestes Match.
   const { data: firstMatch } = await supabase

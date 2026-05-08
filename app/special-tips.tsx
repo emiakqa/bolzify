@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LeaguePickerBar } from '@/components/league-picker-bar';
 import { PickerGroup, PickerPlayer, PlayerPicker } from '@/components/player-picker';
 import { PickerTeam, TeamPicker } from '@/components/team-picker';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import {
   Shadow,
   Spacing,
 } from '@/constants/design';
+import { useActiveLeague } from '@/hooks/use-active-league';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/lib/auth';
 import { deName } from '@/lib/country-names';
@@ -55,11 +57,23 @@ const SLOT_CONFIG: { key: TeamSlot; label: string }[] = [
 
 type Tab = 'top' | 'groups';
 
+type AdoptableTip = {
+  league_id: string;
+  league_name: string;
+  champion_team_id: number | null;
+  runner_up_team_id: number | null;
+  semifinalist_a_team_id: number | null;
+  semifinalist_b_team_id: number | null;
+  top_scorer_player_id: number | null;
+  group_picks: Record<string, number>;
+};
+
 export default function SpecialTipsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const scheme = useColorScheme() ?? 'dark';
   const c = Colors[scheme];
+  const { leagues, activeLeagueId, setActive } = useActiveLeague();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,9 +101,10 @@ export default function SpecialTipsScreen() {
 
   const [openPicker, setOpenPicker] = useState<Slot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [adoptable, setAdoptable] = useState<AdoptableTip | null>(null);
 
   const load = useCallback(async () => {
-    if (!user) return;
+    if (!user || !activeLeagueId) return;
     setLoadError(null);
     setLoading(true);
     try {
@@ -128,13 +143,15 @@ export default function SpecialTipsScreen() {
       const initialGroupPicks: Record<string, PickerTeam | null> = {};
       for (const g of grps) initialGroupPicks[g.letter] = null;
 
+      // Group-Winner-Tipps für AKTIVE Liga laden.
       if (grps.length > 0) {
         const teamById = new Map(pickerTeams.map((tm) => [tm.id, tm]));
         const { data: gwTips } = await supabase
           .from('group_winner_tips')
           .select('group_letter, team_id')
           .eq('user_id', user.id)
-          .eq('tournament', t);
+          .eq('tournament', t)
+          .eq('league_id', activeLeagueId);
         for (const row of gwTips ?? []) {
           initialGroupPicks[row.group_letter] = teamById.get(row.team_id) ?? null;
         }
@@ -148,6 +165,7 @@ export default function SpecialTipsScreen() {
         )
         .eq('user_id', user.id)
         .eq('tournament', t)
+        .eq('league_id', activeLeagueId)
         .maybeSingle();
 
       const teamById = new Map(pickerTeams.map((t) => [t.id, t]));
@@ -173,6 +191,58 @@ export default function SpecialTipsScreen() {
           if (p) newState.top_scorer = p;
         }
         setState(newState);
+        setAdoptable(null);
+      } else {
+        // Hat der User in einer ANDEREN Liga schon Sondertipps? Dann
+        // Übernehmen-Button anbieten — sonst muss er bei 5 Ligen das ganze
+        // Turnier 5× tippen. Wir holen die first-best-Liga, der Rest ist
+        // Vorschlag, kein Konsens.
+        setState({
+          champion: null,
+          runner_up: null,
+          semifinalist_a: null,
+          semifinalist_b: null,
+          top_scorer: null,
+        });
+        const { data: others } = await supabase
+          .from('special_tips')
+          .select(
+            'league_id, champion_team_id, runner_up_team_id, semifinalist_a_team_id, semifinalist_b_team_id, top_scorer_player_id',
+          )
+          .eq('user_id', user.id)
+          .eq('tournament', t)
+          .neq('league_id', activeLeagueId)
+          .limit(1);
+        const o = others?.[0];
+        if (o) {
+          // Group-Winner-Picks der gleichen Liga mitnehmen — sonst übernehmen
+          // wir Top-Tipps aber nicht die Gruppensieger, das wäre inkonsistent.
+          const { data: gwOther } = await supabase
+            .from('group_winner_tips')
+            .select('group_letter, team_id')
+            .eq('user_id', user.id)
+            .eq('tournament', t)
+            .eq('league_id', o.league_id);
+          const gpicks: Record<string, number> = {};
+          for (const row of gwOther ?? []) gpicks[row.group_letter] = row.team_id;
+          const { data: lg } = await supabase
+            .from('leagues')
+            .select('name')
+            .eq('id', o.league_id)
+            .maybeSingle();
+          setAdoptable({
+            league_id: o.league_id,
+            league_name: lg?.name ?? '—',
+            champion_team_id: o.champion_team_id,
+            runner_up_team_id: o.runner_up_team_id,
+            semifinalist_a_team_id: o.semifinalist_a_team_id,
+            semifinalist_b_team_id: o.semifinalist_b_team_id,
+            top_scorer_player_id: o.top_scorer_player_id,
+            group_picks: gpicks,
+          });
+        } else {
+          setAdoptable(null);
+        }
       }
 
       if (pickerTeams.length > 0) {
@@ -205,11 +275,60 @@ export default function SpecialTipsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, activeLeagueId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  // "Übernehmen"-Button: kopiert die Sondertipps aus einer anderen Liga
+  // in die lokalen States. Group-Winner-Picks werden mit übernommen.
+  // Speicher-Klick ist weiterhin nötig (User hat Veto-Recht falls aus
+  // Versehen geklickt).
+  const adoptOther = async () => {
+    if (!adoptable || teams.length === 0) return;
+    const teamById = new Map(teams.map((tm) => [tm.id, tm]));
+
+    let topScorer: PickerPlayer | null = null;
+    if (adoptable.top_scorer_player_id) {
+      const { data: p } = await supabase
+        .from('players')
+        .select('id, name, number, position, team_id')
+        .eq('id', adoptable.top_scorer_player_id)
+        .maybeSingle();
+      topScorer = p ?? null;
+    }
+
+    setState({
+      champion: adoptable.champion_team_id
+        ? teamById.get(adoptable.champion_team_id) ?? null
+        : null,
+      runner_up: adoptable.runner_up_team_id
+        ? teamById.get(adoptable.runner_up_team_id) ?? null
+        : null,
+      semifinalist_a: adoptable.semifinalist_a_team_id
+        ? teamById.get(adoptable.semifinalist_a_team_id) ?? null
+        : null,
+      semifinalist_b: adoptable.semifinalist_b_team_id
+        ? teamById.get(adoptable.semifinalist_b_team_id) ?? null
+        : null,
+      top_scorer: topScorer,
+    });
+
+    // Group-Winner-Picks rüberkopieren — beibehalten dass Letters ohne
+    // Pick null bleiben.
+    const newGroupPicks: Record<string, PickerTeam | null> = { ...groupPicks };
+    for (const letter of Object.keys(newGroupPicks)) {
+      const teamId = adoptable.group_picks[letter];
+      newGroupPicks[letter] = teamId ? teamById.get(teamId) ?? null : null;
+    }
+    setGroupPicks(newGroupPicks);
+
+    setAdoptable(null);
+    setSaved(false);
+  };
 
   // Countdown live updaten
   useEffect(() => {
@@ -248,7 +367,7 @@ export default function SpecialTipsScreen() {
   };
 
   const submit = async () => {
-    if (!user || !tournament) return;
+    if (!user || !tournament || !activeLeagueId) return;
     setError(null);
     setSaving(true);
     try {
@@ -256,6 +375,7 @@ export default function SpecialTipsScreen() {
         {
           user_id: user.id,
           tournament,
+          league_id: activeLeagueId,
           champion_team_id: state.champion?.id ?? null,
           runner_up_team_id: state.runner_up?.id ?? null,
           semifinalist_a_team_id: state.semifinalist_a?.id ?? null,
@@ -263,7 +383,7 @@ export default function SpecialTipsScreen() {
           top_scorer_player_id: state.top_scorer?.id ?? null,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'user_id,tournament' },
+        { onConflict: 'user_id,tournament,league_id' },
       );
 
       if (err) {
@@ -280,6 +400,7 @@ export default function SpecialTipsScreen() {
           .delete()
           .eq('user_id', user.id)
           .eq('tournament', tournament)
+          .eq('league_id', activeLeagueId)
           .in('group_letter', emptyLetters);
         if (delErr) {
           setError(delErr.message);
@@ -291,13 +412,14 @@ export default function SpecialTipsScreen() {
         const rows = filledLetters.map((letter) => ({
           user_id: user.id,
           tournament,
+          league_id: activeLeagueId,
           group_letter: letter,
           team_id: groupPicks[letter]!.id,
           updated_at: new Date().toISOString(),
         }));
         const { error: upErr } = await supabase
           .from('group_winner_tips')
-          .upsert(rows, { onConflict: 'user_id,tournament,group_letter' });
+          .upsert(rows, { onConflict: 'user_id,tournament,league_id,group_letter' });
         if (upErr) {
           setError(upErr.message);
           return;
@@ -339,6 +461,53 @@ export default function SpecialTipsScreen() {
     );
   }
 
+  // Keine Liga → keine Sondertipps möglich (per-Liga seit 0016).
+  if (leagues.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: c.bg }]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.scroll}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
+            <Text style={{ color: c.textMuted, fontFamily: Fonts.body.regular, fontSize: 14 }}>
+              ← Zurück
+            </Text>
+          </Pressable>
+          <Card padding="xl" style={{ alignItems: 'center', marginTop: Spacing.lg }}>
+            <Text
+              style={{
+                color: c.text,
+                fontFamily: Fonts.display.bold,
+                fontSize: 18,
+                letterSpacing: -0.3,
+                textAlign: 'center',
+                marginBottom: Spacing.sm,
+              }}>
+              Erst Liga, dann Sondertipps.
+            </Text>
+            <Text
+              style={{
+                color: c.textMuted,
+                fontFamily: Fonts.body.regular,
+                fontSize: 14,
+                lineHeight: 21,
+                textAlign: 'center',
+                marginBottom: Spacing.lg,
+              }}>
+              Sondertipps gibt&apos;s pro Liga — leg eine an oder tritt per Code bei.
+            </Text>
+            <Button
+              label="Zu den Ligen"
+              onPress={() => {
+                router.back();
+                router.push('/(tabs)/leagues');
+              }}
+            />
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Deadline-Countdown
   const deadlineDelta = deadline ? new Date(deadline).getTime() - now : null;
   const deadlineCountdown = (() => {
@@ -365,6 +534,13 @@ export default function SpecialTipsScreen() {
             ← Zurück
           </Text>
         </Pressable>
+
+        {/* Liga-Picker — Sondertipps sind pro Liga, hier wechseln. */}
+        <LeaguePickerBar
+          leagues={leagues}
+          activeId={activeLeagueId}
+          onSelect={setActive}
+        />
 
         {/* Headline */}
         <View>
@@ -430,6 +606,37 @@ export default function SpecialTipsScreen() {
                 {deadlineCountdown}
               </Text>
             ) : null}
+          </Card>
+        ) : null}
+
+        {/* Übernehmen-Hinweis: User hat in einer anderen Liga schon Sondertipps */}
+        {adoptable && !locked ? (
+          <Card variant="flat" padding="md">
+            <View style={styles.adoptRow}>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: c.textMuted,
+                    fontFamily: Fonts.mono.bold,
+                    fontSize: 10,
+                    letterSpacing: LetterSpacing.label,
+                    textTransform: 'uppercase',
+                    marginBottom: 4,
+                  }}>
+                  In „{adoptable.league_name}" schon getippt
+                </Text>
+                <Text
+                  style={{
+                    color: c.text,
+                    fontFamily: Fonts.body.regular,
+                    fontSize: 13,
+                    lineHeight: 19,
+                  }}>
+                  Top-Tipps & Gruppensieger 1:1 für diese Liga übernehmen?
+                </Text>
+              </View>
+              <Button label="Übernehmen" size="sm" variant="secondary" onPress={adoptOther} />
+            </View>
           </Card>
         ) : null}
 
@@ -883,5 +1090,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  adoptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
 });

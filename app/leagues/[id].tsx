@@ -128,16 +128,20 @@ export default function LeagueDetailScreen() {
     const pointsMap = new Map<string, { total: number; count: number }>();
 
     if (userIds.length > 0) {
+      // Punkte streng pro Liga filtern (per-Liga seit 0016) — sonst würden
+      // wir ungewollt Punkte aus anderen Ligen mitsummieren.
       const [{ data: profiles }, { data: scored }, { data: scoredSpecial }] =
         await Promise.all([
           supabase.from('profiles').select('id, username').in('id', userIds),
           supabase
             .from('scored_tips')
             .select('user_id, total_points')
+            .eq('league_id', id)
             .in('user_id', userIds),
           supabase
             .from('scored_special_tips')
             .select('user_id, total_points')
+            .eq('league_id', id)
             .in('user_id', userIds),
         ]);
       for (const p of profiles ?? []) profileMap.set(p.id, p.username);
